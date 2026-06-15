@@ -48,6 +48,13 @@ And Ghostel command state for the buffer is unknown or unavailable
 When `ghostel-dwim-idle-p` is called for that buffer
 Then the function returns nil
 
+#### Scenario: Fresh session without command markers is not idle
+
+Given a newly created Ghostel buffer has a live process
+And Ghostel has not reported command start or finish state for that buffer
+When `ghostel-dwim-idle-p` is called for that buffer
+Then the function returns nil
+
 #### Scenario: Idle detection does not inspect terminal text
 
 Given any buffer

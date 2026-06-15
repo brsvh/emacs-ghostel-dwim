@@ -91,9 +91,10 @@ reusing a session that may be running a foreground command, especially for
 buffers created before the hooks were installed or shells that do not emit the
 expected shell integration markers.
 
-The implementation may initialize newly created Ghostel buffers to an idle
-state only where Ghostel's creation path establishes that the session starts at
-a prompt. That initialization must stay in the same command-state boundary.
+Newly created Ghostel buffers should remain in unknown command state until
+Ghostel reports command state through shell integration markers. Creation
+alone is not enough evidence that later commands will be tracked, because shell
+integration may be disabled or unsupported.
 
 ### Creation Delegation
 

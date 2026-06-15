@@ -39,9 +39,9 @@
 ;; including `ghostel-project-buffer-scope', so `default-directory' and
 ;; project identity behave the same way as Ghostel's project commands.
 ;;
-;; These layers only handle scoped discovery, explicit fresh opening,
-;; and scoped switching.  They do not decide whether a terminal is idle,
-;; reuse idle sessions, or clean up buffers.
+;; These layers handle scoped discovery, explicit fresh opening,
+;; scoped switching, and DWIM reuse of idle sessions.  They do not
+;; clean up buffers.
 
 ;;; Code:
 
@@ -50,9 +50,18 @@
 
 (declare-function ghostel--project-buffers "ghostel" ())
 
+(defvar ghostel--process)
+
 (defconst ghostel-dwim--other-window-action
   '(nil . ((inhibit-same-window . t)))
   "Display action expressing intent to avoid the selected window.")
+
+(defvar-local ghostel-dwim--command-state nil
+  "Known Ghostel command state for the current buffer.
+
+The value is nil when command state is unknown, `idle' when the
+session is known to be at a prompt, and `running' while Ghostel
+has reported a foreground command running.")
 
 (defun ghostel-dwim--normalize-directory (directory)
   "Return DIRECTORY as an expanded directory name.
@@ -78,6 +87,51 @@ Signal `user-error' when DIRECTORY cannot be normalized."
   (and (buffer-live-p buffer)
        (with-current-buffer buffer
          (derived-mode-p 'ghostel-mode))))
+
+(defun ghostel-dwim--live-buffer (buffer)
+  "Return BUFFER as a live buffer, or nil."
+  (cond
+   ((buffer-live-p buffer) buffer)
+   ((stringp buffer) (get-buffer buffer))))
+
+(defun ghostel-dwim--ghostel-process (buffer)
+  "Return the Ghostel process stored for BUFFER.
+
+This is the only compatibility boundary that reads Ghostel's
+private process storage."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (and (boundp 'ghostel--process)
+           (processp ghostel--process)
+           ghostel--process))))
+
+(defun ghostel-dwim--live-ghostel-process-p (buffer)
+  "Return non-nil when BUFFER has a live Ghostel process."
+  (let ((process (ghostel-dwim--ghostel-process buffer)))
+    (and process (process-live-p process))))
+
+(defun ghostel-dwim--set-command-state (buffer state)
+  "Set Ghostel DWIM command STATE for BUFFER when it is live."
+  (when (ghostel-dwim--ghostel-buffer-p buffer)
+    (with-current-buffer buffer
+      (setq ghostel-dwim--command-state state))))
+
+(defun ghostel-dwim--command-start (buffer)
+  "Record that BUFFER has started a foreground command."
+  (ghostel-dwim--set-command-state buffer 'running))
+
+(defun ghostel-dwim--command-finish (buffer _exit-status)
+  "Record that BUFFER has returned to an idle prompt."
+  (ghostel-dwim--set-command-state buffer 'idle))
+
+(defun ghostel-dwim-idle-p (buffer)
+  "Return non-nil when BUFFER is a reusable idle Ghostel session."
+  (let ((target (ghostel-dwim--live-buffer buffer)))
+    (and target
+         (ghostel-dwim--ghostel-buffer-p target)
+         (ghostel-dwim--live-ghostel-process-p target)
+         (eq (buffer-local-value 'ghostel-dwim--command-state target)
+             'idle))))
 
 (defun ghostel-dwim--buffer-names (buffers)
   "Return the names of BUFFERS."
@@ -130,6 +184,21 @@ Signal `user-error' with EMPTY-MESSAGE when BUFFERS is nil."
   (pop-to-buffer buffer)
   buffer)
 
+(defun ghostel-dwim--first-idle-buffer (buffers)
+  "Return the first idle Ghostel buffer from BUFFERS."
+  (catch 'found
+    (dolist (buffer buffers)
+      (when (ghostel-dwim-idle-p buffer)
+        (throw 'found buffer)))
+    nil))
+
+(defun ghostel-dwim--reuse-or-open (buffers open-function)
+  "Display the first idle buffer in BUFFERS or call OPEN-FUNCTION."
+  (let ((buffer (ghostel-dwim--first-idle-buffer buffers)))
+    (if buffer
+        (ghostel-dwim--display-buffer buffer)
+      (funcall open-function))))
+
 (defun ghostel-dwim-directory-buffers ()
   "Return Ghostel buffers associated with the current directory."
   (let ((directory (ghostel-dwim--normalize-directory default-directory))
@@ -170,6 +239,20 @@ rules such as `display-buffer-alist'."
   (interactive)
   (ghostel-dwim--require-project)
   (ghostel-project t))
+
+;;;###autoload
+(defun ghostel-dwim ()
+  "Reuse an idle Ghostel session in the current directory or start one."
+  (interactive)
+  (ghostel-dwim--reuse-or-open (ghostel-dwim-directory-buffers)
+                               #'ghostel-dwim-open))
+
+;;;###autoload
+(defun ghostel-dwim-project ()
+  "Reuse an idle Ghostel session in the current project or start one."
+  (interactive)
+  (ghostel-dwim--reuse-or-open (ghostel-dwim-project-buffers)
+                               #'ghostel-dwim-project-open))
 
 ;;;###autoload
 (defun ghostel-dwim-project-open-other-window ()
@@ -219,6 +302,9 @@ associated with the current project."
        (or (car buffers)
            (user-error
             "No Ghostel buffers are associated with the current project"))))))
+
+(add-hook 'ghostel-command-start-functions #'ghostel-dwim--command-start)
+(add-hook 'ghostel-command-finish-functions #'ghostel-dwim--command-finish)
 
 (provide 'ghostel-dwim)
 ;;; ghostel-dwim.el ends here
