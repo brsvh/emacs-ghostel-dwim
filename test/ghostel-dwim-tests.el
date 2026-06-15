@@ -1,4 +1,4 @@
-;;; ghostel-dwim-tests.el --- Tests for ghostel-dwim -*- lexical-binding:t -*-
+;;; ghostel-dwim-tests.el --- Tests -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2026 Bingshan Chang
 
@@ -9,6 +9,7 @@
 (require 'cl-lib)
 (require 'ert)
 (require 'ghostel-dwim)
+(require 'subr-x)
 
 (let ((project-list-path (make-temp-file "ghostel-dwim-projects-")))
   (delete-file project-list-path)
