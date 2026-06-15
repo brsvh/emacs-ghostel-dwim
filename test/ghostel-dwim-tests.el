@@ -62,6 +62,35 @@
                 nil)))
      ,@body))
 
+(defmacro ghostel-dwim-test--with-confirmation
+    (result prompts-var &rest body)
+  "Run BODY with cleanup confirmation returning RESULT.
+
+Bind PROMPTS-VAR to the prompts received by the confirmation hook."
+  (declare (indent 2))
+  `(let* ((,prompts-var nil)
+          (ghostel-dwim-confirm-kill-running-functions
+           (list (lambda (prompt)
+                   (push prompt ,prompts-var)
+                   ,result))))
+     ,@body))
+
+(defmacro ghostel-dwim-test--without-confirmation (&rest body)
+  "Run BODY and fail if cleanup confirmation is requested."
+  (declare (indent 0))
+  `(let ((ghostel-dwim-confirm-kill-running-functions
+          (list (lambda (&rest _)
+                  (error "confirmation should not be requested")))))
+     ,@body))
+
+(defmacro ghostel-dwim-test--with-window-state (&rest body)
+  "Run BODY and restore the current window configuration afterward."
+  (declare (indent 0))
+  `(let ((configuration (current-window-configuration)))
+     (unwind-protect
+         (progn ,@body)
+       (set-window-configuration configuration))))
+
 (defun ghostel-dwim-test--track-buffer (buffer)
   "Track BUFFER for cleanup and return it."
   (push buffer ghostel-dwim-test--buffers)
@@ -1137,6 +1166,454 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
             (should (eq first (ghostel-dwim-project)))))
         (should (eq displayed first))
         (should-not (eq displayed second))))))
+
+(ert-deftest ghostel-dwim-clear-buffers-kills-directory-exited-only ()
+  (ghostel-dwim-test--with-temp-dir dir
+    (ghostel-dwim-test--with-temp-dir other-dir
+      (ghostel-dwim-test--with-buffers
+        (let ((current (ghostel-dwim-test--make-buffer "current" dir))
+              (exited (ghostel-dwim-test--make-ghostel-session
+                       "ghostel-exited-directory" dir nil))
+              (live (ghostel-dwim-test--make-ghostel-session
+                     "ghostel-live-directory" dir 'idle 'live))
+              (other (ghostel-dwim-test--make-ghostel-session
+                      "ghostel-other-exited-directory" other-dir nil))
+              (plain (ghostel-dwim-test--make-buffer
+                      "plain-exited-directory" dir)))
+          (with-current-buffer current
+            (should (= 1 (ghostel-dwim-clear-buffers))))
+          (should-not (buffer-live-p exited))
+          (should (buffer-live-p live))
+          (should (buffer-live-p other))
+          (should (buffer-live-p plain)))))))
+
+(ert-deftest ghostel-dwim-clear-buffers-no-op-without-directory-exited ()
+  (ghostel-dwim-test--with-temp-dir dir
+    (ghostel-dwim-test--with-buffers
+      (let ((current (ghostel-dwim-test--make-buffer "current" dir))
+            (live (ghostel-dwim-test--make-ghostel-session
+                   "ghostel-live-directory" dir 'idle 'live)))
+        (cl-letf (((symbol-function 'ghostel)
+                   (lambda (&rest _)
+                     (error "ghostel should not be called")))
+                  ((symbol-function 'ghostel-project)
+                   (lambda (&rest _)
+                     (error "ghostel-project should not be called"))))
+          (with-current-buffer current
+            (should (= 0 (ghostel-dwim-clear-buffers)))))
+        (should (buffer-live-p live))))))
+
+(ert-deftest ghostel-dwim-clear-idle-buffers-kills-directory-idle-only ()
+  (ghostel-dwim-test--with-temp-dir dir
+    (ghostel-dwim-test--with-temp-dir other-dir
+      (ghostel-dwim-test--with-buffers
+        (let ((current (ghostel-dwim-test--make-buffer "current" dir))
+              (idle (ghostel-dwim-test--make-ghostel-session
+                     "ghostel-idle-directory-cleanup" dir 'idle 'live))
+              (running (ghostel-dwim-test--make-ghostel-session
+                        "ghostel-running-directory-cleanup"
+                        dir 'running 'live))
+              (unknown (ghostel-dwim-test--make-ghostel-session
+                        "ghostel-unknown-directory-cleanup" dir nil 'live))
+              (exited (ghostel-dwim-test--make-ghostel-session
+                       "ghostel-exited-directory-cleanup" dir nil))
+              (other (ghostel-dwim-test--make-ghostel-session
+                      "ghostel-other-idle-directory-cleanup"
+                      other-dir 'idle 'live)))
+          (ghostel-dwim-test--without-confirmation
+            (with-current-buffer current
+              (should (= 1 (ghostel-dwim-clear-idle-buffers)))))
+          (should-not (buffer-live-p idle))
+          (should (buffer-live-p running))
+          (should (buffer-live-p unknown))
+          (should (buffer-live-p exited))
+          (should (buffer-live-p other)))))))
+
+(ert-deftest ghostel-dwim-clear-idle-buffers-no-op-without-directory-idle ()
+  (ghostel-dwim-test--with-temp-dir dir
+    (ghostel-dwim-test--with-buffers
+      (let ((current (ghostel-dwim-test--make-buffer "current" dir))
+            (running (ghostel-dwim-test--make-ghostel-session
+                      "ghostel-running-directory" dir 'running 'live)))
+        (ghostel-dwim-test--without-confirmation
+          (with-current-buffer current
+            (should (= 0 (ghostel-dwim-clear-idle-buffers)))))
+        (should (buffer-live-p running))))))
+
+(ert-deftest ghostel-dwim-kill-buffers-kills-directory-without-prompt ()
+  (ghostel-dwim-test--with-temp-dir dir
+    (ghostel-dwim-test--with-temp-dir other-dir
+      (ghostel-dwim-test--with-buffers
+        (let ((current (ghostel-dwim-test--make-buffer "current" dir))
+              (exited (ghostel-dwim-test--make-ghostel-session
+                       "ghostel-exited-directory-kill" dir nil))
+              (idle (ghostel-dwim-test--make-ghostel-session
+                     "ghostel-idle-directory-kill" dir 'idle 'live))
+              (other (ghostel-dwim-test--make-ghostel-session
+                      "ghostel-other-directory-kill"
+                      other-dir 'idle 'live)))
+          (ghostel-dwim-test--without-confirmation
+            (with-current-buffer current
+              (should (= 2 (ghostel-dwim-kill-buffers)))))
+          (should-not (buffer-live-p exited))
+          (should-not (buffer-live-p idle))
+          (should (buffer-live-p other)))))))
+
+(ert-deftest ghostel-dwim-kill-buffers-prompts-on-running-once ()
+  (ghostel-dwim-test--with-temp-dir dir
+    (ghostel-dwim-test--with-buffers
+      (let ((current (ghostel-dwim-test--make-buffer "current" dir))
+            (running (ghostel-dwim-test--make-ghostel-session
+                      "ghostel-running-directory-kill"
+                      dir 'running 'live))
+            (idle (ghostel-dwim-test--make-ghostel-session
+                   "ghostel-idle-directory-kill" dir 'idle 'live)))
+        (ghostel-dwim-test--with-confirmation t prompts
+          (with-current-buffer current
+            (should (= 2 (ghostel-dwim-kill-buffers))))
+          (should (= 1 (length prompts))))
+        (should-not (buffer-live-p running))
+        (should-not (buffer-live-p idle))))))
+
+(ert-deftest ghostel-dwim-kill-buffers-prompts-on-unknown-live ()
+  (ghostel-dwim-test--with-temp-dir dir
+    (ghostel-dwim-test--with-buffers
+      (let ((current (ghostel-dwim-test--make-buffer "current" dir))
+            (unknown (ghostel-dwim-test--make-ghostel-session
+                      "ghostel-unknown-directory-kill" dir nil 'live)))
+        (ghostel-dwim-test--with-confirmation t prompts
+          (with-current-buffer current
+            (should (= 1 (ghostel-dwim-kill-buffers))))
+          (should (= 1 (length prompts))))
+        (should-not (buffer-live-p unknown))))))
+
+(ert-deftest ghostel-dwim-kill-buffers-decline-preserves-directory ()
+  (ghostel-dwim-test--with-temp-dir dir
+    (ghostel-dwim-test--with-buffers
+      (let ((current (ghostel-dwim-test--make-buffer "current" dir))
+            (running (ghostel-dwim-test--make-ghostel-session
+                      "ghostel-running-directory-decline"
+                      dir 'running 'live))
+            (exited (ghostel-dwim-test--make-ghostel-session
+                     "ghostel-exited-directory-decline" dir nil)))
+        (ghostel-dwim-test--with-confirmation nil prompts
+          (with-current-buffer current
+            (should (= 0 (ghostel-dwim-kill-buffers))))
+          (should (= 1 (length prompts))))
+        (should (buffer-live-p running))
+        (should (buffer-live-p exited))))))
+
+(ert-deftest ghostel-dwim-kill-buffers-no-op-without-directory-buffers ()
+  (ghostel-dwim-test--with-temp-dir dir
+    (ghostel-dwim-test--with-buffers
+      (let ((current (ghostel-dwim-test--make-buffer "current" dir)))
+        (ghostel-dwim-test--without-confirmation
+          (with-current-buffer current
+            (should (= 0 (ghostel-dwim-kill-buffers)))))))))
+
+(ert-deftest ghostel-dwim-project-clear-buffers-kills-exited-only ()
+  (ghostel-dwim-test--with-project project-dir
+    (ghostel-dwim-test--with-project other-project-dir
+      (ghostel-dwim-test--with-buffers
+        (let ((current (ghostel-dwim-test--make-buffer "current"
+                                                       project-dir))
+              (exited (ghostel-dwim-test--make-ghostel-session
+                       "ghostel-exited-project" project-dir nil))
+              (live (ghostel-dwim-test--make-ghostel-session
+                     "ghostel-live-project" project-dir 'idle 'live))
+              (other (ghostel-dwim-test--make-ghostel-session
+                      "ghostel-other-exited-project" other-project-dir nil)))
+          (with-current-buffer current
+            (should (= 1 (ghostel-dwim-project-clear-buffers))))
+          (should-not (buffer-live-p exited))
+          (should (buffer-live-p live))
+          (should (buffer-live-p other)))))))
+
+(ert-deftest ghostel-dwim-project-clear-buffers-errors-with-no-project ()
+  (ghostel-dwim-test--with-temp-dir dir
+    (ghostel-dwim-test--with-buffers
+      (let ((current (ghostel-dwim-test--make-buffer "current" dir))
+            (exited (ghostel-dwim-test--make-ghostel-session
+                     "ghostel-no-project-exited" dir nil)))
+        (ghostel-dwim-test--without-project
+          (with-current-buffer current
+            (should-error (ghostel-dwim-project-clear-buffers)
+                          :type 'user-error)))
+        (should (buffer-live-p exited))))))
+
+(ert-deftest ghostel-dwim-project-clear-idle-buffers-kills-idle-only ()
+  (ghostel-dwim-test--with-project project-dir
+    (ghostel-dwim-test--with-project other-project-dir
+      (ghostel-dwim-test--with-buffers
+        (let ((current (ghostel-dwim-test--make-buffer "current"
+                                                       project-dir))
+              (idle (ghostel-dwim-test--make-ghostel-session
+                     "ghostel-idle-project-cleanup"
+                     project-dir 'idle 'live))
+              (running (ghostel-dwim-test--make-ghostel-session
+                        "ghostel-running-project-cleanup"
+                        project-dir 'running 'live))
+              (unknown (ghostel-dwim-test--make-ghostel-session
+                        "ghostel-unknown-project-cleanup"
+                        project-dir nil 'live))
+              (other (ghostel-dwim-test--make-ghostel-session
+                      "ghostel-other-idle-project-cleanup"
+                      other-project-dir 'idle 'live)))
+          (ghostel-dwim-test--without-confirmation
+            (with-current-buffer current
+              (should (= 1 (ghostel-dwim-project-clear-idle-buffers)))))
+          (should-not (buffer-live-p idle))
+          (should (buffer-live-p running))
+          (should (buffer-live-p unknown))
+          (should (buffer-live-p other)))))))
+
+(ert-deftest ghostel-dwim-project-clear-idle-buffers-errors-no-project ()
+  (ghostel-dwim-test--with-temp-dir dir
+    (ghostel-dwim-test--with-buffers
+      (let ((current (ghostel-dwim-test--make-buffer "current" dir))
+            (idle (ghostel-dwim-test--make-ghostel-session
+                   "ghostel-no-project-idle" dir 'idle 'live)))
+        (ghostel-dwim-test--without-project
+          (with-current-buffer current
+            (should-error (ghostel-dwim-project-clear-idle-buffers)
+                          :type 'user-error)))
+        (should (buffer-live-p idle))))))
+
+(ert-deftest ghostel-dwim-project-kill-buffers-kills-without-prompt ()
+  (ghostel-dwim-test--with-project project-dir
+    (ghostel-dwim-test--with-project other-project-dir
+      (ghostel-dwim-test--with-buffers
+        (let ((current (ghostel-dwim-test--make-buffer "current"
+                                                       project-dir))
+              (exited (ghostel-dwim-test--make-ghostel-session
+                       "ghostel-exited-project-kill" project-dir nil))
+              (idle (ghostel-dwim-test--make-ghostel-session
+                     "ghostel-idle-project-kill" project-dir 'idle 'live))
+              (other (ghostel-dwim-test--make-ghostel-session
+                      "ghostel-other-project-kill"
+                      other-project-dir 'idle 'live)))
+          (ghostel-dwim-test--without-confirmation
+            (with-current-buffer current
+              (should (= 2 (ghostel-dwim-project-kill-buffers)))))
+          (should-not (buffer-live-p exited))
+          (should-not (buffer-live-p idle))
+          (should (buffer-live-p other)))))))
+
+(ert-deftest ghostel-dwim-project-kill-buffers-prompts-on-running-once ()
+  (ghostel-dwim-test--with-project project-dir
+    (ghostel-dwim-test--with-buffers
+      (let ((current (ghostel-dwim-test--make-buffer "current" project-dir))
+            (running (ghostel-dwim-test--make-ghostel-session
+                      "ghostel-running-project-kill"
+                      project-dir 'running 'live))
+            (idle (ghostel-dwim-test--make-ghostel-session
+                   "ghostel-idle-project-kill" project-dir 'idle 'live)))
+        (ghostel-dwim-test--with-confirmation t prompts
+          (with-current-buffer current
+            (should (= 2 (ghostel-dwim-project-kill-buffers))))
+          (should (= 1 (length prompts))))
+        (should-not (buffer-live-p running))
+        (should-not (buffer-live-p idle))))))
+
+(ert-deftest ghostel-dwim-project-kill-buffers-prompts-on-unknown-live ()
+  (ghostel-dwim-test--with-project project-dir
+    (ghostel-dwim-test--with-buffers
+      (let ((current (ghostel-dwim-test--make-buffer "current" project-dir))
+            (unknown (ghostel-dwim-test--make-ghostel-session
+                      "ghostel-unknown-project-kill"
+                      project-dir nil 'live)))
+        (ghostel-dwim-test--with-confirmation t prompts
+          (with-current-buffer current
+            (should (= 1 (ghostel-dwim-project-kill-buffers))))
+          (should (= 1 (length prompts))))
+        (should-not (buffer-live-p unknown))))))
+
+(ert-deftest ghostel-dwim-project-kill-buffers-decline-preserves-project ()
+  (ghostel-dwim-test--with-project project-dir
+    (ghostel-dwim-test--with-buffers
+      (let ((current (ghostel-dwim-test--make-buffer "current" project-dir))
+            (running (ghostel-dwim-test--make-ghostel-session
+                      "ghostel-running-project-decline"
+                      project-dir 'running 'live))
+            (exited (ghostel-dwim-test--make-ghostel-session
+                     "ghostel-exited-project-decline" project-dir nil)))
+        (ghostel-dwim-test--with-confirmation nil prompts
+          (with-current-buffer current
+            (should (= 0 (ghostel-dwim-project-kill-buffers))))
+          (should (= 1 (length prompts))))
+        (should (buffer-live-p running))
+        (should (buffer-live-p exited))))))
+
+(ert-deftest ghostel-dwim-project-kill-buffers-errors-with-no-project ()
+  (ghostel-dwim-test--with-temp-dir dir
+    (ghostel-dwim-test--with-buffers
+      (let ((current (ghostel-dwim-test--make-buffer "current" dir))
+            (target (ghostel-dwim-test--make-ghostel-session
+                     "ghostel-no-project-kill" dir nil)))
+        (ghostel-dwim-test--without-project
+          (with-current-buffer current
+            (should-error (ghostel-dwim-project-kill-buffers)
+                          :type 'user-error)))
+        (should (buffer-live-p target))))))
+
+(ert-deftest ghostel-dwim-cleanup-deletes-bottom-window-after-kill ()
+  (ghostel-dwim-test--with-window-state
+    (ghostel-dwim-test--with-temp-dir dir
+      (ghostel-dwim-test--with-buffers
+        (let* ((current (ghostel-dwim-test--make-buffer "current" dir))
+               (target (ghostel-dwim-test--make-ghostel-session
+                        "ghostel-bottom-cleanup" dir nil))
+               (window (display-buffer-in-side-window
+                        target '((side . bottom)))))
+          (with-current-buffer current
+            (should (= 1 (ghostel-dwim-clear-buffers))))
+          (should-not (buffer-live-p target))
+          (should-not (window-live-p window)))))))
+
+(ert-deftest ghostel-dwim-cleanup-deletes-multiple-bottom-windows ()
+  (ghostel-dwim-test--with-window-state
+    (ghostel-dwim-test--with-temp-dir dir
+      (ghostel-dwim-test--with-buffers
+        (let* ((current (ghostel-dwim-test--make-buffer "current" dir))
+               (target (ghostel-dwim-test--make-ghostel-session
+                        "ghostel-multiple-bottom-cleanup" dir nil))
+               (first (display-buffer-in-side-window
+                       target '((side . bottom) (slot . 0))))
+               (second (display-buffer-in-side-window
+                        target '((side . bottom) (slot . 1)))))
+          (with-current-buffer current
+            (should (= 1 (ghostel-dwim-clear-buffers))))
+          (should-not (buffer-live-p target))
+          (should-not (window-live-p first))
+          (should-not (window-live-p second)))))))
+
+(ert-deftest ghostel-dwim-cleanup-preserves-ordinary-window ()
+  (ghostel-dwim-test--with-window-state
+    (ghostel-dwim-test--with-temp-dir dir
+      (ghostel-dwim-test--with-buffers
+        (let* ((current (ghostel-dwim-test--make-buffer "current" dir))
+               (target (ghostel-dwim-test--make-ghostel-session
+                        "ghostel-ordinary-window-cleanup" dir nil))
+               (window (split-window-right)))
+          (set-window-buffer window target)
+          (with-current-buffer current
+            (should (= 1 (ghostel-dwim-clear-buffers))))
+          (should-not (buffer-live-p target))
+          (should (window-live-p window)))))))
+
+(ert-deftest ghostel-dwim-cleanup-preserves-non-bottom-side-window ()
+  (ghostel-dwim-test--with-window-state
+    (ghostel-dwim-test--with-temp-dir dir
+      (ghostel-dwim-test--with-buffers
+        (let* ((current (ghostel-dwim-test--make-buffer "current" dir))
+               (target (ghostel-dwim-test--make-ghostel-session
+                        "ghostel-right-side-window-cleanup" dir nil))
+               (window (display-buffer-in-side-window
+                        target '((side . right))))
+               deleted)
+          (cl-letf (((symbol-function 'ghostel-dwim--delete-bottom-windows)
+                     (lambda (windows)
+                       (setq deleted windows))))
+            (with-current-buffer current
+              (should (= 1 (ghostel-dwim-clear-buffers)))))
+          (should-not (buffer-live-p target))
+          (should-not (memq window deleted)))))))
+
+(ert-deftest ghostel-dwim-cleanup-decline-preserves-bottom-window ()
+  (ghostel-dwim-test--with-window-state
+    (ghostel-dwim-test--with-temp-dir dir
+      (ghostel-dwim-test--with-buffers
+        (let* ((current (ghostel-dwim-test--make-buffer "current" dir))
+               (target (ghostel-dwim-test--make-ghostel-session
+                        "ghostel-bottom-decline" dir 'running 'live))
+               (window (display-buffer-in-side-window
+                        target '((side . bottom)))))
+          (ghostel-dwim-test--with-confirmation nil prompts
+            (with-current-buffer current
+              (should (= 0 (ghostel-dwim-kill-buffers))))
+            (should (= 1 (length prompts))))
+          (should (buffer-live-p target))
+          (should (window-live-p window)))))))
+
+(ert-deftest ghostel-dwim-cleanup-does-not-create-sessions ()
+  (ghostel-dwim-test--with-project project-dir
+    (ghostel-dwim-test--with-buffers
+      (let ((current (ghostel-dwim-test--make-buffer "current" project-dir))
+            (directory-target (ghostel-dwim-test--make-ghostel-session
+                               "ghostel-directory-no-create"
+                               project-dir nil))
+            (project-target (ghostel-dwim-test--make-ghostel-session
+                             "ghostel-project-no-create"
+                             project-dir nil)))
+        (cl-letf (((symbol-function 'ghostel)
+                   (lambda (&rest _)
+                     (error "ghostel should not be called")))
+                  ((symbol-function 'ghostel-project)
+                   (lambda (&rest _)
+                     (error "ghostel-project should not be called"))))
+          (with-current-buffer current
+            (should (= 2 (ghostel-dwim-clear-buffers)))))
+        (should-not (buffer-live-p directory-target))
+        (should-not (buffer-live-p project-target))))))
+
+(ert-deftest ghostel-dwim-cleanup-avoids-shell-text-and-file-inspection ()
+  (ghostel-dwim-test--with-temp-dir dir
+    (ghostel-dwim-test--with-buffers
+      (let ((current (ghostel-dwim-test--make-buffer "current" dir)))
+        (ghostel-dwim-test--make-ghostel-session
+         "ghostel-no-inspection-cleanup" dir nil)
+        (cl-letf (((symbol-function 'buffer-substring)
+                   (lambda (&rest _)
+                     (error "buffer text should not be inspected")))
+                  ((symbol-function 'buffer-substring-no-properties)
+                   (lambda (&rest _)
+                     (error "buffer text should not be inspected")))
+                  ((symbol-function 'search-forward)
+                   (lambda (&rest _)
+                     (error "buffer text should not be searched")))
+                  ((symbol-function 'shell-command)
+                   (lambda (&rest _)
+                     (error "shell-command should not be called")))
+                  ((symbol-function 'insert-file-contents)
+                   (lambda (&rest _)
+                     (error "files should not be read"))))
+          (with-current-buffer current
+            (should (= 1 (ghostel-dwim-clear-buffers)))))))))
+
+(ert-deftest ghostel-dwim-directory-cleanup-uses-discovery-results ()
+  (ghostel-dwim-test--with-temp-dir dir
+    (ghostel-dwim-test--with-temp-dir other-dir
+      (ghostel-dwim-test--with-buffers
+        (let ((current (ghostel-dwim-test--make-buffer "current" dir))
+              (target (ghostel-dwim-test--make-ghostel-session
+                       "ghostel-discovery-directory" other-dir nil))
+              calls)
+          (cl-letf (((symbol-function 'ghostel-dwim-directory-buffers)
+                     (lambda ()
+                       (setq calls (1+ (or calls 0)))
+                       (list target))))
+            (with-current-buffer current
+              (should (= 1 (ghostel-dwim-clear-buffers)))))
+          (should (= calls 1))
+          (should-not (buffer-live-p target)))))))
+
+(ert-deftest ghostel-dwim-project-cleanup-uses-discovery-results ()
+  (ghostel-dwim-test--with-project project-dir
+    (ghostel-dwim-test--with-project other-project-dir
+      (ghostel-dwim-test--with-buffers
+        (let ((current (ghostel-dwim-test--make-buffer "current"
+                                                       project-dir))
+              (target (ghostel-dwim-test--make-ghostel-session
+                       "ghostel-discovery-project" other-project-dir nil))
+              calls)
+          (cl-letf (((symbol-function 'ghostel-dwim-project-buffers)
+                     (lambda ()
+                       (setq calls (1+ (or calls 0)))
+                       (list target))))
+            (with-current-buffer current
+              (should (= 1 (ghostel-dwim-project-clear-buffers)))))
+          (should (= calls 1))
+          (should-not (buffer-live-p target)))))))
 
 (provide 'ghostel-dwim-tests)
 

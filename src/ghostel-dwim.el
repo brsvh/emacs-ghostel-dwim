@@ -40,13 +40,14 @@
 ;; project identity behave the same way as Ghostel's project commands.
 ;;
 ;; These layers handle scoped discovery, explicit fresh opening,
-;; scoped switching, and DWIM reuse of idle sessions.  They do not
-;; clean up buffers.
+;; scoped switching, DWIM reuse of idle sessions, and scoped cleanup of
+;; Ghostel buffers.
 
 ;;; Code:
 
 (require 'ghostel)
 (require 'project)
+(require 'seq)
 
 (declare-function ghostel--project-buffers "ghostel" ())
 
@@ -55,6 +56,14 @@
 (defconst ghostel-dwim--other-window-action
   '(nil . ((inhibit-same-window . t)))
   "Display action expressing intent to avoid the selected window.")
+
+(defvar ghostel-dwim-confirm-kill-running-functions
+  '(ghostel-dwim--yes-or-no-p)
+  "Hook run to confirm killing running or unknown live Ghostel buffers.
+
+Each function is called with one prompt string and should return
+non-nil to allow cleanup to proceed.  Cleanup proceeds only when
+all functions return non-nil.")
 
 (defvar-local ghostel-dwim--command-state nil
   "Known Ghostel command state for the current buffer.
@@ -132,6 +141,101 @@ private process storage."
          (ghostel-dwim--live-ghostel-process-p target)
          (eq (buffer-local-value 'ghostel-dwim--command-state target)
              'idle))))
+
+(defun ghostel-dwim--command-running-p (buffer)
+  "Return non-nil when BUFFER is known to run a foreground command."
+  (and (ghostel-dwim--ghostel-buffer-p buffer)
+       (ghostel-dwim--live-ghostel-process-p buffer)
+       (eq (buffer-local-value 'ghostel-dwim--command-state buffer)
+           'running)))
+
+(defun ghostel-dwim--command-state-unknown-p (buffer)
+  "Return non-nil when BUFFER is live but Ghostel command state is unknown."
+  (and (ghostel-dwim--ghostel-buffer-p buffer)
+       (ghostel-dwim--live-ghostel-process-p buffer)
+       (null (buffer-local-value 'ghostel-dwim--command-state buffer))))
+
+(defun ghostel-dwim--live-risk-buffer-p (buffer)
+  "Return non-nil when BUFFER should require confirmation before kill."
+  (or (ghostel-dwim--command-running-p buffer)
+      (ghostel-dwim--command-state-unknown-p buffer)))
+
+(defun ghostel-dwim--exited-buffer-p (buffer)
+  "Return non-nil when BUFFER is a Ghostel buffer without a live process."
+  (and (ghostel-dwim--ghostel-buffer-p buffer)
+       (not (ghostel-dwim--live-ghostel-process-p buffer))))
+
+(defun ghostel-dwim--yes-or-no-p (prompt)
+  "Ask PROMPT with `yes-or-no-p'."
+  (yes-or-no-p prompt))
+
+(defun ghostel-dwim--confirm-running-kill (scope buffers)
+  "Return non-nil when risky BUFFERS in SCOPE may be killed."
+  (let ((count (length buffers)))
+    (run-hook-with-args-until-failure
+     'ghostel-dwim-confirm-kill-running-functions
+     (format "Kill %d running or unknown live Ghostel buffer%s in current %s? "
+             count
+             (if (= count 1) "" "s")
+             scope))))
+
+(defun ghostel-dwim--buffer-bottom-windows (buffer)
+  "Return live bottom windows displaying BUFFER."
+  (let (windows)
+    (walk-windows
+     (lambda (window)
+       (when (and (window-live-p window)
+                  (eq (window-buffer window) buffer)
+                  (eq (window-parameter window 'window-side) 'bottom))
+         (push window windows)))
+     nil t)
+    (nreverse windows)))
+
+(defun ghostel-dwim--delete-bottom-windows (windows)
+  "Delete live bottom WINDOWS, ignoring windows that cannot be deleted."
+  (dolist (window windows)
+    (when (and (window-live-p window)
+               (eq (window-parameter window 'window-side) 'bottom))
+      (ignore-errors
+        (delete-window window)))))
+
+(defun ghostel-dwim--kill-buffer (buffer)
+  "Kill BUFFER and clean up bottom windows it displayed.
+
+Return non-nil when BUFFER was live before the kill attempt and is
+  no longer live afterward."
+  (when (buffer-live-p buffer)
+    (let ((windows (ghostel-dwim--buffer-bottom-windows buffer)))
+      (let ((kill-buffer-query-functions
+             (remq 'process-kill-buffer-query-function
+                   (copy-sequence kill-buffer-query-functions))))
+        (kill-buffer buffer))
+      (unless (buffer-live-p buffer)
+        (ghostel-dwim--delete-bottom-windows windows)
+        t))))
+
+(defun ghostel-dwim--cleanup-buffers
+    (buffers predicate &optional scope require-confirmation)
+  "Kill BUFFERS matching PREDICATE and return the killed count.
+
+SCOPE is used in confirmation prompts.  When REQUIRE-CONFIRMATION
+is non-nil, prompt once before killing if any matching buffer is a
+live-risk buffer."
+  (let* ((candidates (seq-filter predicate buffers))
+         (risks (seq-filter #'ghostel-dwim--live-risk-buffer-p
+                            candidates)))
+    (if (and require-confirmation
+             risks
+             (not (ghostel-dwim--confirm-running-kill
+                   (or scope "scope")
+                   risks)))
+        0
+      (let ((count 0))
+        (dolist (buffer candidates count)
+          (when (and (buffer-live-p buffer)
+                     (funcall predicate buffer)
+                     (ghostel-dwim--kill-buffer buffer))
+            (setq count (1+ count))))))))
 
 (defun ghostel-dwim--buffer-names (buffers)
   "Return the names of BUFFERS."
@@ -253,6 +357,62 @@ rules such as `display-buffer-alist'."
   (interactive)
   (ghostel-dwim--reuse-or-open (ghostel-dwim-project-buffers)
                                #'ghostel-dwim-project-open))
+
+;;;###autoload
+(defun ghostel-dwim-clear-buffers ()
+  "Kill exited Ghostel buffers associated with the current directory."
+  (interactive)
+  (ghostel-dwim--cleanup-buffers
+   (ghostel-dwim-directory-buffers)
+   #'ghostel-dwim--exited-buffer-p
+   "directory"))
+
+;;;###autoload
+(defun ghostel-dwim-clear-idle-buffers ()
+  "Kill idle Ghostel buffers associated with the current directory."
+  (interactive)
+  (ghostel-dwim--cleanup-buffers
+   (ghostel-dwim-directory-buffers)
+   #'ghostel-dwim-idle-p
+   "directory"))
+
+;;;###autoload
+(defun ghostel-dwim-kill-buffers ()
+  "Kill all Ghostel buffers associated with the current directory."
+  (interactive)
+  (ghostel-dwim--cleanup-buffers
+   (ghostel-dwim-directory-buffers)
+   #'ghostel-dwim--ghostel-buffer-p
+   "directory"
+   t))
+
+;;;###autoload
+(defun ghostel-dwim-project-clear-buffers ()
+  "Kill exited Ghostel buffers associated with the current project."
+  (interactive)
+  (ghostel-dwim--cleanup-buffers
+   (ghostel-dwim-project-buffers)
+   #'ghostel-dwim--exited-buffer-p
+   "project"))
+
+;;;###autoload
+(defun ghostel-dwim-project-clear-idle-buffers ()
+  "Kill idle Ghostel buffers associated with the current project."
+  (interactive)
+  (ghostel-dwim--cleanup-buffers
+   (ghostel-dwim-project-buffers)
+   #'ghostel-dwim-idle-p
+   "project"))
+
+;;;###autoload
+(defun ghostel-dwim-project-kill-buffers ()
+  "Kill all Ghostel buffers associated with the current project."
+  (interactive)
+  (ghostel-dwim--cleanup-buffers
+   (ghostel-dwim-project-buffers)
+   #'ghostel-dwim--ghostel-buffer-p
+   "project"
+   t))
 
 ;;;###autoload
 (defun ghostel-dwim-project-open-other-window ()
