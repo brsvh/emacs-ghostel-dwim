@@ -9,6 +9,7 @@ let
     ;
 
   inherit (pkgs)
+    git
     treefmt
     writeShellScriptBin
     ;
@@ -21,11 +22,12 @@ in
 writeShellScriptBin "treefmt" ''
   set -euo pipefail
 
-  export PATH=${makeBinPath packages}
+  export PATH=${makeBinPath (packages ++ [ git ])}
 
   exec ${treefmt}/bin/treefmt \
     --config-file=${file} \
     --no-cache \
     --tree-root-file=flake.nix \
+    --walk=git \
     "$@"
 ''

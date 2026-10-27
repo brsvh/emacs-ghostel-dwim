@@ -97,7 +97,8 @@ Bind PROMPTS-VAR to the prompts received by the confirmation hook."
   (push buffer ghostel-dwim-test--buffers)
   buffer)
 
-(defun ghostel-dwim-test--make-buffer (name directory &optional ghostel-p)
+(defun ghostel-dwim-test--make-buffer
+    (name directory &optional ghostel-p)
   "Create a test buffer named NAME in DIRECTORY.
 
 When GHOSTEL-P is non-nil, put the buffer in `ghostel-mode'."
@@ -260,28 +261,33 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                      (error "files should not be read"))))
           (should (ghostel-dwim-idle-p buffer)))))))
 
-(ert-deftest ghostel-dwim-directory-buffers-includes-current-directory ()
+(ert-deftest
+    ghostel-dwim-directory-buffers-includes-current-directory ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
             (ghostel-buffer
-             (ghostel-dwim-test--make-buffer "ghostel-current" dir t)))
+             (ghostel-dwim-test--make-buffer
+              "ghostel-current" dir t)))
         (with-current-buffer current
           (should (memq ghostel-buffer
                         (ghostel-dwim-directory-buffers))))))))
 
-(ert-deftest ghostel-dwim-directory-buffers-excludes-other-directory ()
+(ert-deftest
+    ghostel-dwim-directory-buffers-excludes-other-directory ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-temp-dir other-dir
       (ghostel-dwim-test--with-buffers
         (let ((current (ghostel-dwim-test--make-buffer "current" dir))
-              (other (ghostel-dwim-test--make-buffer "ghostel-other"
-                                                     other-dir t)))
+              (other (ghostel-dwim-test--make-buffer
+                      "ghostel-other"
+                      other-dir t)))
           (with-current-buffer current
             (should-not (memq other
                               (ghostel-dwim-directory-buffers)))))))))
 
-(ert-deftest ghostel-dwim-directory-buffers-excludes-non-ghostel-buffer ()
+(ert-deftest
+    ghostel-dwim-directory-buffers-excludes-non-ghostel-buffer ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
@@ -290,12 +296,14 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
           (should-not (memq plain
                             (ghostel-dwim-directory-buffers))))))))
 
-(ert-deftest ghostel-dwim-directory-buffers-normalizes-trailing-slash ()
+(ert-deftest
+    ghostel-dwim-directory-buffers-normalizes-trailing-slash ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
             (ghostel-buffer
-             (ghostel-dwim-test--make-buffer "ghostel-no-slash" dir t)))
+             (ghostel-dwim-test--make-buffer
+              "ghostel-no-slash" dir t)))
         (with-current-buffer ghostel-buffer
           (setq default-directory (directory-file-name dir)))
         (with-current-buffer current
@@ -307,7 +315,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
             (ghostel-buffer
-             (ghostel-dwim-test--make-buffer "ghostel-before-rename" dir t)))
+             (ghostel-dwim-test--make-buffer
+              "ghostel-before-rename" dir t)))
         (with-current-buffer ghostel-buffer
           (rename-buffer "ghostel-after-rename"))
         (with-current-buffer current
@@ -325,14 +334,18 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                        (error "file-truename should not be called")))
                     ((symbol-function 'file-directory-p)
                      (lambda (&rest _)
-                       (error "file-directory-p should not be called")))
+                       (error
+                        "file-directory-p should not be called")))
                     ((symbol-function 'project-current)
                      (lambda (&rest _)
-                       (error "project-current should not be called")))
+                       (error
+                        "project-current should not be called")))
                     ((symbol-function 'shell-command)
                      (lambda (&rest _)
                        (error "shell-command should not be called"))))
-            (should (= 1 (length (ghostel-dwim-directory-buffers))))))))))
+            (should (= 1
+                       (length
+                        (ghostel-dwim-directory-buffers))))))))))
 
 (ert-deftest ghostel-dwim-switch-errors-with-no-directory-buffers ()
   (ghostel-dwim-test--with-temp-dir dir
@@ -363,8 +376,9 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
     (ghostel-dwim-test--with-temp-dir other-dir
       (ghostel-dwim-test--with-buffers
         (let ((current (ghostel-dwim-test--make-buffer "current" dir))
-              (other (ghostel-dwim-test--make-buffer "ghostel-other"
-                                                     other-dir t)))
+              (other (ghostel-dwim-test--make-buffer
+                      "ghostel-other"
+                      other-dir t)))
           (with-current-buffer current
             (should-error (ghostel-dwim-switch other)
                           :type 'user-error)))))))
@@ -373,7 +387,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
-            (target (ghostel-dwim-test--make-buffer "ghostel-target" dir t))
+            (target (ghostel-dwim-test--make-buffer
+                     "ghostel-target" dir t))
             displayed)
         (cl-letf (((symbol-function 'ghostel-dwim--display-buffer)
                    (lambda (buffer)
@@ -388,10 +403,13 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
     (ghostel-dwim-test--with-temp-dir other-dir
       (ghostel-dwim-test--with-buffers
         (let ((current (ghostel-dwim-test--make-buffer "current" dir))
-              (first (ghostel-dwim-test--make-buffer "ghostel-first" dir t))
-              (second (ghostel-dwim-test--make-buffer "ghostel-second" dir t))
-              (_other (ghostel-dwim-test--make-buffer "ghostel-other"
-                                                      other-dir t))
+              (first (ghostel-dwim-test--make-buffer
+                      "ghostel-first" dir t))
+              (second (ghostel-dwim-test--make-buffer
+                       "ghostel-second" dir t))
+              (_other (ghostel-dwim-test--make-buffer
+                       "ghostel-other"
+                       other-dir t))
               candidates
               displayed)
           (cl-letf (((symbol-function 'completing-read)
@@ -423,7 +441,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
             (should-error (ghostel-dwim-switch)
                           :type 'user-error)))))))
 
-(ert-deftest ghostel-dwim-open-requests-fresh-session-in-current-directory ()
+(ert-deftest
+    ghostel-dwim-open-requests-fresh-session-in-current-directory ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
@@ -468,7 +487,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                                         created))
         (should-not (ghostel-dwim-idle-p created))))))
 
-(ert-deftest ghostel-dwim-open-other-window-expresses-display-intent ()
+(ert-deftest
+    ghostel-dwim-open-other-window-expresses-display-intent ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
@@ -479,7 +499,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                    (lambda (&optional arg)
                      (setq call-arg arg)
                      (setq call-directory default-directory)
-                     (setq display-action display-buffer-overriding-action)
+                     (setq display-action
+                           display-buffer-overriding-action)
                      'created)))
           (with-current-buffer current
             (should (eq 'created (ghostel-dwim-open-other-window)))))
@@ -509,7 +530,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
         (should (eq displayed target))
         (should-not opened)))))
 
-(ert-deftest ghostel-dwim-creates-directory-session-with-no-candidates ()
+(ert-deftest
+    ghostel-dwim-creates-directory-session-with-no-candidates ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
@@ -551,7 +573,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
     (ghostel-dwim-test--with-buffers
       (let* ((current (ghostel-dwim-test--make-buffer "current" dir))
              (running (ghostel-dwim-test--make-ghostel-session
-                       "ghostel-running-directory" dir 'running 'live))
+                       "ghostel-running-directory"
+                       dir 'running 'live))
              (process (buffer-local-value 'ghostel--process running))
              opened
              displayed)
@@ -577,7 +600,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
             (_running (ghostel-dwim-test--make-ghostel-session
-                       "ghostel-running-directory" dir 'running 'live))
+                       "ghostel-running-directory"
+                       dir 'running 'live))
             (idle (ghostel-dwim-test--make-ghostel-session
                    "ghostel-idle-directory" dir 'idle 'live))
             opened
@@ -601,7 +625,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
       (ghostel-dwim-test--with-buffers
         (let ((current (ghostel-dwim-test--make-buffer "current" dir))
               (_other (ghostel-dwim-test--make-ghostel-session
-                       "ghostel-other-directory" other-dir 'idle 'live))
+                       "ghostel-other-directory"
+                       other-dir 'idle 'live))
               opened)
           (cl-letf (((symbol-function 'ghostel-dwim-open)
                      (lambda ()
@@ -609,7 +634,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                        'opened))
                     ((symbol-function 'ghostel-dwim--display-buffer)
                      (lambda (&rest _)
-                       (error "Other directory should not be displayed"))))
+                       (error
+                        "Other directory should not be displayed"))))
             (with-current-buffer current
               (should (eq 'opened (ghostel-dwim)))))
           (should opened))))))
@@ -628,7 +654,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                      (list first second)))
                   ((symbol-function 'ghostel-dwim-open)
                    (lambda ()
-                     (error "ghostel-dwim-open should not be called")))
+                     (error
+                      "ghostel-dwim-open should not be called")))
                   ((symbol-function 'ghostel-dwim--display-buffer)
                    (lambda (buffer)
                      (setq displayed buffer)
@@ -673,13 +700,15 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
       (ghostel-dwim-test--with-buffers
         (let ((current (ghostel-dwim-test--make-buffer "current"
                                                        project-dir))
-              (other (ghostel-dwim-test--make-buffer "ghostel-other-project"
-                                                     other-project-dir t)))
+              (other (ghostel-dwim-test--make-buffer
+                      "ghostel-other-project"
+                      other-project-dir t)))
           (with-current-buffer current
             (should-not (memq other
                               (ghostel-dwim-project-buffers)))))))))
 
-(ert-deftest ghostel-dwim-project-buffers-excludes-non-ghostel-buffer ()
+(ert-deftest
+    ghostel-dwim-project-buffers-excludes-non-ghostel-buffer ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current"
@@ -722,8 +751,9 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                                                        project-dir))
               (inside (ghostel-dwim-test--make-buffer "ghostel-inside"
                                                       project-dir t))
-              (outside (ghostel-dwim-test--make-buffer "ghostel-outside"
-                                                       other-project-dir t)))
+              (outside (ghostel-dwim-test--make-buffer
+                        "ghostel-outside"
+                        other-project-dir t)))
           (with-current-buffer current
             (let ((buffers (ghostel-dwim-project-buffers)))
               (should (memq inside buffers))
@@ -740,11 +770,13 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                 (with-current-buffer current
                   (ghostel-dwim-test--current-project-identity)))
                (identity-match
-                (ghostel-dwim-test--make-buffer "ghostel-identity-match"
-                                                other-project-dir t))
+                (ghostel-dwim-test--make-buffer
+                 "ghostel-identity-match"
+                 other-project-dir t))
                (directory-only
-                (ghostel-dwim-test--make-buffer "ghostel-directory-only"
-                                                project-dir t)))
+                (ghostel-dwim-test--make-buffer
+                 "ghostel-directory-only"
+                 project-dir t)))
           (with-current-buffer identity-match
             (ghostel-dwim-test--set-identity identity))
           (with-current-buffer directory-only
@@ -765,11 +797,13 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                 (with-current-buffer current
                   (ghostel-dwim-test--current-project-identity)))
                (directory-match
-                (ghostel-dwim-test--make-buffer "ghostel-directory-match"
-                                                project-dir t))
+                (ghostel-dwim-test--make-buffer
+                 "ghostel-directory-match"
+                 project-dir t))
                (identity-match
-                (ghostel-dwim-test--make-buffer "ghostel-identity-match"
-                                                other-project-dir t))
+                (ghostel-dwim-test--make-buffer
+                 "ghostel-identity-match"
+                 other-project-dir t))
                (both-match
                 (ghostel-dwim-test--make-buffer "ghostel-both-match"
                                                 project-dir t)))
@@ -783,21 +817,26 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
               (should (memq identity-match buffers))
               (should (memq both-match buffers))
               (should (= (length buffers)
-                         (length (delete-dups (copy-sequence buffers))))))))))))
+                         (length
+                          (delete-dups
+                           (copy-sequence buffers))))))))))))
 
 (ert-deftest ghostel-dwim-project-buffers-avoids-extra-side-effects ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current"
                                                      project-dir)))
-        (ghostel-dwim-test--make-buffer "ghostel-current" project-dir t)
+        (ghostel-dwim-test--make-buffer
+         "ghostel-current" project-dir t)
         (with-current-buffer current
           (cl-letf (((symbol-function 'shell-command)
                      (lambda (&rest _)
                        (error "shell-command should not be called"))))
-            (should (= 1 (length (ghostel-dwim-project-buffers))))))))))
+            (should (= 1
+                       (length (ghostel-dwim-project-buffers))))))))))
 
-(ert-deftest ghostel-dwim-project-switch-errors-with-no-project-buffers ()
+(ert-deftest
+    ghostel-dwim-project-switch-errors-with-no-project-buffers ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current"
@@ -824,24 +863,28 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
           (should-error (ghostel-dwim-project-switch "missing-buffer")
                         :type 'user-error))))))
 
-(ert-deftest ghostel-dwim-project-switch-errors-for-non-ghostel-target ()
+(ert-deftest
+    ghostel-dwim-project-switch-errors-for-non-ghostel-target ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current"
                                                      project-dir))
-            (plain (ghostel-dwim-test--make-buffer "plain" project-dir)))
+            (plain (ghostel-dwim-test--make-buffer
+                    "plain" project-dir)))
         (with-current-buffer current
           (should-error (ghostel-dwim-project-switch plain)
                         :type 'user-error))))))
 
-(ert-deftest ghostel-dwim-project-switch-errors-for-out-of-project-target ()
+(ert-deftest
+    ghostel-dwim-project-switch-errors-for-out-of-project-target ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-project other-project-dir
       (ghostel-dwim-test--with-buffers
         (let ((current (ghostel-dwim-test--make-buffer "current"
                                                        project-dir))
-              (other (ghostel-dwim-test--make-buffer "ghostel-other"
-                                                     other-project-dir t)))
+              (other (ghostel-dwim-test--make-buffer
+                      "ghostel-other"
+                      other-project-dir t)))
           (with-current-buffer current
             (should-error (ghostel-dwim-project-switch other)
                           :type 'user-error)))))))
@@ -863,7 +906,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                         (ghostel-dwim-project-switch target)))))
         (should (eq displayed target))))))
 
-(ert-deftest ghostel-dwim-project-switch-interactive-candidates-are-scoped ()
+(ert-deftest
+    ghostel-dwim-project-switch-interactive-candidates-are-scoped ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-project other-project-dir
       (ghostel-dwim-test--with-buffers
@@ -873,8 +917,9 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                                                      project-dir t))
               (second (ghostel-dwim-test--make-buffer "ghostel-second"
                                                       project-dir t))
-              (_other (ghostel-dwim-test--make-buffer "ghostel-other"
-                                                      other-project-dir t))
+              (_other (ghostel-dwim-test--make-buffer
+                       "ghostel-other"
+                       other-project-dir t))
               candidates
               displayed)
           (cl-letf (((symbol-function 'completing-read)
@@ -892,7 +937,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                          (sort candidates #'string<)))
           (should (eq displayed second)))))))
 
-(ert-deftest ghostel-dwim-project-switch-explicit-target-with-no-project ()
+(ert-deftest
+    ghostel-dwim-project-switch-explicit-target-with-no-project ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
@@ -921,8 +967,10 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
 (ert-deftest ghostel-dwim-project-open-delegates-fresh-session ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-buffers
-      (let* ((subdir (ghostel-dwim-test--make-subdir project-dir "src"))
-             (current (ghostel-dwim-test--make-buffer "current" subdir))
+      (let* ((subdir (ghostel-dwim-test--make-subdir
+                      project-dir "src"))
+             (current (ghostel-dwim-test--make-buffer
+                       "current" subdir))
              call-arg)
         (cl-letf (((symbol-function 'ghostel-project)
                    (lambda (&optional arg)
@@ -932,7 +980,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
             (should (eq 'created (ghostel-dwim-project-open)))))
         (should (eq call-arg t))))))
 
-(ert-deftest ghostel-dwim-project-open-repeatedly-requests-fresh-session ()
+(ert-deftest
+    ghostel-dwim-project-open-repeatedly-requests-fresh-session ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current"
@@ -947,7 +996,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
             (ghostel-dwim-project-open)))
         (should (equal calls '(t t)))))))
 
-(ert-deftest ghostel-dwim-project-open-preserves-unknown-command-state ()
+(ert-deftest
+    ghostel-dwim-project-open-preserves-unknown-command-state ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-buffers
       (let* ((current (ghostel-dwim-test--make-buffer "current"
@@ -973,17 +1023,21 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
             (should-error (ghostel-dwim-project-open)
                           :type 'user-error)))))))
 
-(ert-deftest ghostel-dwim-project-open-other-window-expresses-display-intent ()
+(ert-deftest
+    ghostel-dwim-project-open-other-window-expresses-display-intent ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-buffers
-      (let* ((subdir (ghostel-dwim-test--make-subdir project-dir "src"))
-             (current (ghostel-dwim-test--make-buffer "current" subdir))
+      (let* ((subdir (ghostel-dwim-test--make-subdir
+                      project-dir "src"))
+             (current (ghostel-dwim-test--make-buffer
+                       "current" subdir))
              call-arg
              display-action)
         (cl-letf (((symbol-function 'ghostel-project)
                    (lambda (&optional arg)
                      (setq call-arg arg)
-                     (setq display-action display-buffer-overriding-action)
+                     (setq display-action
+                           display-buffer-overriding-action)
                      'created)))
           (with-current-buffer current
             (should (eq 'created
@@ -992,7 +1046,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
         (should (equal display-action
                        ghostel-dwim--other-window-action))))))
 
-(ert-deftest ghostel-dwim-project-open-other-window-errors-with-no-project ()
+(ert-deftest
+    ghostel-dwim-project-open-other-window-errors-with-no-project ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir)))
@@ -1023,7 +1078,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
         (should (eq displayed target))
         (should-not opened)))))
 
-(ert-deftest ghostel-dwim-project-creates-session-with-no-candidates ()
+(ert-deftest
+    ghostel-dwim-project-creates-session-with-no-candidates ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current"
@@ -1116,7 +1172,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
         (should (eq displayed idle))
         (should-not opened)))))
 
-(ert-deftest ghostel-dwim-project-does-not-reuse-other-project-session ()
+(ert-deftest
+    ghostel-dwim-project-does-not-reuse-other-project-session ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-project other-project-dir
       (ghostel-dwim-test--with-buffers
@@ -1132,7 +1189,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                        'opened))
                     ((symbol-function 'ghostel-dwim--display-buffer)
                      (lambda (&rest _)
-                       (error "Other project should not be displayed"))))
+                       (error
+                        "Other project should not be displayed"))))
             (with-current-buffer current
               (should (eq 'opened (ghostel-dwim-project)))))
           (should opened))))))
@@ -1169,7 +1227,9 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                      (list first second)))
                   ((symbol-function 'ghostel-dwim-project-open)
                    (lambda ()
-                     (error "ghostel-dwim-project-open should not be called")))
+                     (error
+                      (concat "ghostel-dwim-project-open "
+                              "should not be called"))))
                   ((symbol-function 'ghostel-dwim--display-buffer)
                    (lambda (buffer)
                      (setq displayed buffer)
@@ -1202,7 +1262,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
           (should (buffer-live-p other))
           (should (buffer-live-p plain)))))))
 
-(ert-deftest ghostel-dwim-clear-buffers-no-op-without-directory-exited ()
+(ert-deftest
+    ghostel-dwim-clear-buffers-no-op-without-directory-exited ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
@@ -1218,18 +1279,21 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
             (should (= 0 (ghostel-dwim-clear-buffers)))))
         (should (buffer-live-p live))))))
 
-(ert-deftest ghostel-dwim-clear-idle-buffers-kills-directory-idle-only ()
+(ert-deftest
+    ghostel-dwim-clear-idle-buffers-kills-directory-idle-only ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-temp-dir other-dir
       (ghostel-dwim-test--with-buffers
         (let ((current (ghostel-dwim-test--make-buffer "current" dir))
               (idle (ghostel-dwim-test--make-ghostel-session
-                     "ghostel-idle-directory-cleanup" dir 'idle 'live))
+                     "ghostel-idle-directory-cleanup"
+                     dir 'idle 'live))
               (running (ghostel-dwim-test--make-ghostel-session
                         "ghostel-running-directory-cleanup"
                         dir 'running 'live))
               (unknown (ghostel-dwim-test--make-ghostel-session
-                        "ghostel-unknown-directory-cleanup" dir nil 'live))
+                        "ghostel-unknown-directory-cleanup"
+                        dir nil 'live))
               (exited (ghostel-dwim-test--make-ghostel-session
                        "ghostel-exited-directory-cleanup" dir nil))
               (other (ghostel-dwim-test--make-ghostel-session
@@ -1244,18 +1308,21 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
           (should (buffer-live-p exited))
           (should (buffer-live-p other)))))))
 
-(ert-deftest ghostel-dwim-clear-idle-buffers-no-op-without-directory-idle ()
+(ert-deftest
+    ghostel-dwim-clear-idle-buffers-no-op-without-directory-idle ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
             (running (ghostel-dwim-test--make-ghostel-session
-                      "ghostel-running-directory" dir 'running 'live)))
+                      "ghostel-running-directory"
+                      dir 'running 'live)))
         (ghostel-dwim-test--without-confirmation
           (with-current-buffer current
             (should (= 0 (ghostel-dwim-clear-idle-buffers)))))
         (should (buffer-live-p running))))))
 
-(ert-deftest ghostel-dwim-kill-buffers-kills-directory-without-prompt ()
+(ert-deftest
+    ghostel-dwim-kill-buffers-kills-directory-without-prompt ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-temp-dir other-dir
       (ghostel-dwim-test--with-buffers
@@ -1295,7 +1362,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
             (unknown (ghostel-dwim-test--make-ghostel-session
-                      "ghostel-unknown-directory-kill" dir nil 'live)))
+                      "ghostel-unknown-directory-kill"
+                      dir nil 'live)))
         (ghostel-dwim-test--with-confirmation t prompts
           (with-current-buffer current
             (should (= 1 (ghostel-dwim-kill-buffers))))
@@ -1318,7 +1386,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
         (should (buffer-live-p running))
         (should (buffer-live-p exited))))))
 
-(ert-deftest ghostel-dwim-kill-buffers-no-op-without-directory-buffers ()
+(ert-deftest
+    ghostel-dwim-kill-buffers-no-op-without-directory-buffers ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir)))
@@ -1337,14 +1406,16 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
               (live (ghostel-dwim-test--make-ghostel-session
                      "ghostel-live-project" project-dir 'idle 'live))
               (other (ghostel-dwim-test--make-ghostel-session
-                      "ghostel-other-exited-project" other-project-dir nil)))
+                      "ghostel-other-exited-project"
+                      other-project-dir nil)))
           (with-current-buffer current
             (should (= 1 (ghostel-dwim-project-clear-buffers))))
           (should-not (buffer-live-p exited))
           (should (buffer-live-p live))
           (should (buffer-live-p other)))))))
 
-(ert-deftest ghostel-dwim-project-clear-buffers-errors-with-no-project ()
+(ert-deftest
+    ghostel-dwim-project-clear-buffers-errors-with-no-project ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
@@ -1356,7 +1427,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                           :type 'user-error)))
         (should (buffer-live-p exited))))))
 
-(ert-deftest ghostel-dwim-project-clear-idle-buffers-kills-idle-only ()
+(ert-deftest
+    ghostel-dwim-project-clear-idle-buffers-kills-idle-only ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-project other-project-dir
       (ghostel-dwim-test--with-buffers
@@ -1376,13 +1448,15 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                       other-project-dir 'idle 'live)))
           (ghostel-dwim-test--without-confirmation
             (with-current-buffer current
-              (should (= 1 (ghostel-dwim-project-clear-idle-buffers)))))
+              (should (= 1
+                         (ghostel-dwim-project-clear-idle-buffers)))))
           (should-not (buffer-live-p idle))
           (should (buffer-live-p running))
           (should (buffer-live-p unknown))
           (should (buffer-live-p other)))))))
 
-(ert-deftest ghostel-dwim-project-clear-idle-buffers-errors-no-project ()
+(ert-deftest
+    ghostel-dwim-project-clear-idle-buffers-errors-no-project ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
@@ -1403,7 +1477,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
               (exited (ghostel-dwim-test--make-ghostel-session
                        "ghostel-exited-project-kill" project-dir nil))
               (idle (ghostel-dwim-test--make-ghostel-session
-                     "ghostel-idle-project-kill" project-dir 'idle 'live))
+                     "ghostel-idle-project-kill"
+                     project-dir 'idle 'live))
               (other (ghostel-dwim-test--make-ghostel-session
                       "ghostel-other-project-kill"
                       other-project-dir 'idle 'live)))
@@ -1414,15 +1489,18 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
           (should-not (buffer-live-p idle))
           (should (buffer-live-p other)))))))
 
-(ert-deftest ghostel-dwim-project-kill-buffers-prompts-on-running-once ()
+(ert-deftest
+    ghostel-dwim-project-kill-buffers-prompts-on-running-once ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-buffers
-      (let ((current (ghostel-dwim-test--make-buffer "current" project-dir))
+      (let ((current (ghostel-dwim-test--make-buffer
+                      "current" project-dir))
             (running (ghostel-dwim-test--make-ghostel-session
                       "ghostel-running-project-kill"
                       project-dir 'running 'live))
             (idle (ghostel-dwim-test--make-ghostel-session
-                   "ghostel-idle-project-kill" project-dir 'idle 'live)))
+                   "ghostel-idle-project-kill"
+                   project-dir 'idle 'live)))
         (ghostel-dwim-test--with-confirmation t prompts
           (with-current-buffer current
             (should (= 2 (ghostel-dwim-project-kill-buffers))))
@@ -1430,10 +1508,12 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
         (should-not (buffer-live-p running))
         (should-not (buffer-live-p idle))))))
 
-(ert-deftest ghostel-dwim-project-kill-buffers-prompts-on-unknown-live ()
+(ert-deftest
+    ghostel-dwim-project-kill-buffers-prompts-on-unknown-live ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-buffers
-      (let ((current (ghostel-dwim-test--make-buffer "current" project-dir))
+      (let ((current (ghostel-dwim-test--make-buffer
+                      "current" project-dir))
             (unknown (ghostel-dwim-test--make-ghostel-session
                       "ghostel-unknown-project-kill"
                       project-dir nil 'live)))
@@ -1443,15 +1523,18 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
           (should (= 1 (length prompts))))
         (should-not (buffer-live-p unknown))))))
 
-(ert-deftest ghostel-dwim-project-kill-buffers-decline-preserves-project ()
+(ert-deftest
+    ghostel-dwim-project-kill-buffers-decline-preserves-project ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-buffers
-      (let ((current (ghostel-dwim-test--make-buffer "current" project-dir))
+      (let ((current (ghostel-dwim-test--make-buffer
+                      "current" project-dir))
             (running (ghostel-dwim-test--make-ghostel-session
                       "ghostel-running-project-decline"
                       project-dir 'running 'live))
             (exited (ghostel-dwim-test--make-ghostel-session
-                     "ghostel-exited-project-decline" project-dir nil)))
+                     "ghostel-exited-project-decline"
+                     project-dir nil)))
         (ghostel-dwim-test--with-confirmation nil prompts
           (with-current-buffer current
             (should (= 0 (ghostel-dwim-project-kill-buffers))))
@@ -1459,7 +1542,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
         (should (buffer-live-p running))
         (should (buffer-live-p exited))))))
 
-(ert-deftest ghostel-dwim-project-kill-buffers-errors-with-no-project ()
+(ert-deftest
+    ghostel-dwim-project-kill-buffers-errors-with-no-project ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir))
@@ -1475,7 +1559,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
   (ghostel-dwim-test--with-window-state
     (ghostel-dwim-test--with-temp-dir dir
       (ghostel-dwim-test--with-buffers
-        (let* ((current (ghostel-dwim-test--make-buffer "current" dir))
+        (let* ((current (ghostel-dwim-test--make-buffer
+                         "current" dir))
                (target (ghostel-dwim-test--make-ghostel-session
                         "ghostel-bottom-cleanup" dir nil))
                (window (display-buffer-in-side-window
@@ -1489,7 +1574,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
   (ghostel-dwim-test--with-window-state
     (ghostel-dwim-test--with-temp-dir dir
       (ghostel-dwim-test--with-buffers
-        (let* ((current (ghostel-dwim-test--make-buffer "current" dir))
+        (let* ((current (ghostel-dwim-test--make-buffer
+                         "current" dir))
                (target (ghostel-dwim-test--make-ghostel-session
                         "ghostel-multiple-bottom-cleanup" dir nil))
                (first (display-buffer-in-side-window
@@ -1506,7 +1592,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
   (ghostel-dwim-test--with-window-state
     (ghostel-dwim-test--with-temp-dir dir
       (ghostel-dwim-test--with-buffers
-        (let* ((current (ghostel-dwim-test--make-buffer "current" dir))
+        (let* ((current (ghostel-dwim-test--make-buffer
+                         "current" dir))
                (target (ghostel-dwim-test--make-ghostel-session
                         "ghostel-ordinary-window-cleanup" dir nil))
                (window (split-window-right)))
@@ -1520,13 +1607,15 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
   (ghostel-dwim-test--with-window-state
     (ghostel-dwim-test--with-temp-dir dir
       (ghostel-dwim-test--with-buffers
-        (let* ((current (ghostel-dwim-test--make-buffer "current" dir))
+        (let* ((current (ghostel-dwim-test--make-buffer
+                         "current" dir))
                (target (ghostel-dwim-test--make-ghostel-session
                         "ghostel-right-side-window-cleanup" dir nil))
                (window (display-buffer-in-side-window
                         target '((side . right))))
                deleted)
-          (cl-letf (((symbol-function 'ghostel-dwim--delete-bottom-windows)
+          (cl-letf (((symbol-function
+                      'ghostel-dwim--delete-bottom-windows)
                      (lambda (windows)
                        (setq deleted windows))))
             (with-current-buffer current
@@ -1538,7 +1627,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
   (ghostel-dwim-test--with-window-state
     (ghostel-dwim-test--with-temp-dir dir
       (ghostel-dwim-test--with-buffers
-        (let* ((current (ghostel-dwim-test--make-buffer "current" dir))
+        (let* ((current (ghostel-dwim-test--make-buffer
+                         "current" dir))
                (target (ghostel-dwim-test--make-ghostel-session
                         "ghostel-bottom-decline" dir 'running 'live))
                (window (display-buffer-in-side-window
@@ -1553,7 +1643,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
 (ert-deftest ghostel-dwim-cleanup-does-not-create-sessions ()
   (ghostel-dwim-test--with-project project-dir
     (ghostel-dwim-test--with-buffers
-      (let ((current (ghostel-dwim-test--make-buffer "current" project-dir))
+      (let ((current (ghostel-dwim-test--make-buffer
+                      "current" project-dir))
             (directory-target (ghostel-dwim-test--make-ghostel-session
                                "ghostel-directory-no-create"
                                project-dir nil))
@@ -1571,7 +1662,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
         (should-not (buffer-live-p directory-target))
         (should-not (buffer-live-p project-target))))))
 
-(ert-deftest ghostel-dwim-cleanup-avoids-shell-text-and-file-inspection ()
+(ert-deftest
+    ghostel-dwim-cleanup-avoids-shell-text-and-file-inspection ()
   (ghostel-dwim-test--with-temp-dir dir
     (ghostel-dwim-test--with-buffers
       (let ((current (ghostel-dwim-test--make-buffer "current" dir)))
@@ -1619,7 +1711,8 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
         (let ((current (ghostel-dwim-test--make-buffer "current"
                                                        project-dir))
               (target (ghostel-dwim-test--make-ghostel-session
-                       "ghostel-discovery-project" other-project-dir nil))
+                       "ghostel-discovery-project"
+                       other-project-dir nil))
               calls)
           (cl-letf (((symbol-function 'ghostel-dwim-project-buffers)
                      (lambda ()
@@ -1631,5 +1724,4 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
           (should-not (buffer-live-p target)))))))
 
 (provide 'ghostel-dwim-tests)
-
 ;;; ghostel-dwim-tests.el ends here
