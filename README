@@ -1,54 +1,38 @@
-# README --- Let Ghostel Do What I Mean  -*- coding: utf-8; mode: org; -*-
+# README --- Ghostel DWIM README -*- coding: utf-8; mode: org; -*-
 
+#+begin_quote
 Copyright (C) 2026 Bingshan Chang <chang@bingshan.org>
 
-  Permission is granted to copy, distribute and/or modify this document under
-  the terms of the GNU Free Documentation License, Version 1.3 or any later
-  version published by the Free Software Foundation; with no Invariant
-  Sections, no Front-Cover Texts, and no Back-Cover Texts.
+Permission is granted to copy, distribute and/or modify this document under the
+terms of the GNU Free Documentation License, Version 1.3 or any later version
+published by the Free Software Foundation; with no Invariant Sections, no
+Front-Cover Texts, and no Back-Cover Texts.
 
-  You should have received a copy of the GNU Free Documentation License along
-  with this file.  If not, see <https://www.gnu.org/licenses/>.
+You should have received a copy of the GNU Free Documentation License along with
+this file.  If not, see <https://www.gnu.org/licenses/>.
+#+end_quote
 
-#+title: ghostel-dwim
+#+startup: noindent
 
-~ghostel-dwim~ adds context-aware session management commands for ~ghostel~.  It
-helps Emacs find, open, reuse, switch to, and clean up Ghostel terminal buffers
-that belong to the current directory or the current ~project.el~ project.
+* ghostel-dwim
 
-* Getting Started
+~ghostel-dwim~ adds context-aware session management commands for Ghostel.  It
+finds, opens, reuses, switches to, and cleans up Ghostel terminal buffers that
+belong to the current directory or the current ~project.el~ project.
 
-~ghostel-dwim~ requires Emacs 30.1 or later and ~ghostel~ 0.34.0 or later.
+** Getting Started
 
-Until the package is installed from an archive, clone this repository and add it
-to ~load-path~:
+*** Install from Source
 
-#+begin_src emacs-lisp
-  (add-to-list 'load-path "/path/to/emacs-ghostel-dwim/src")
-  (require 'ghostel-dwim)
-#+end_src
-
-With ~use-package~, a compact setup might look like this:
+Use Emacs 30.1 or later and Ghostel 0.34.0 or later.  For a source checkout, add
+~src/~ to ~load-path~ and load the package:
 
 #+begin_src emacs-lisp
-  (use-package ghostel-dwim
-    :after ghostel
-    :load-path "/path/to/emacs-ghostel-dwim/src"
-    :bind (("C-c s s" . ghostel-dwim)
-           ("C-c s c-b" . ghostel-dwim-switch)
-           ("C-c s o" . ghostel-dwim-open)
-           ("C-c s k" . ghostel-dwim-kill-buffers)
-           ("C-c p s" . ghostel-dwim-project)
-           ("C-c p c-b" . ghostel-dwim-project-switch)
-           ("C-c p o" . ghostel-dwim-project-open)
-           ("C-c p k" . ghostel-dwim-project-kill-buffers)))
+(add-to-list 'load-path "/path/to/emacs-ghostel-dwim/src/")
+(require 'ghostel-dwim)
 #+end_src
 
-For most workflows, bind ~ghostel-dwim~ and ~ghostel-dwim-project~ first.  The
-explicit open, switch, and cleanup commands are useful when you manage several
-terminal sessions in the same directory or project.
-
-** Nix
+*** Install with Nix
 
 Add this repository as a flake input named ~ghostel-dwim~:
 
@@ -60,8 +44,8 @@ inputs = {
 };
 #+end_src
 
-Include ~inputs.ghostel-dwim.overlays.default~ in your Nixpkgs overlays,
-then select the package from that Emacs package set:
+Include ~inputs.ghostel-dwim.overlays.default~ in your Nixpkgs overlays, then
+select the package from that Emacs package set:
 
 #+begin_src nix
 (pkgs.emacsPackagesFor pkgs.emacs).emacsWithPackages (
@@ -75,148 +59,160 @@ The overlay builds Ghostel DWIM from this checkout's ~src/~ directory and
 includes Ghostel as a dependency.  It also overrides Ghostel's Zig dependency
 fetching and module cache setup.  The dependency manifest is embedded in
 ~flake.nix~ and checked against Ghostel's complete dependency graph during the
-build.  When updating Nixpkgs to a different Ghostel version, that manifest may
-need updating too.
+build.  Updating Nixpkgs to a different Ghostel version may require updating
+that manifest.
 
-* Commands
+*** Configure
 
-** Directory-wide commands
+For most workflows, bind ~ghostel-dwim~ and ~ghostel-dwim-project~ first.  The
+explicit open, switch, and cleanup commands are useful when managing several
+terminal sessions in the same directory or project.
+
+For example, this ~use-package~ configuration loads a source checkout and
+assigns user-defined key bindings:
+
+#+begin_src emacs-lisp
+(use-package ghostel-dwim
+  :after ghostel
+  :load-path "/path/to/emacs-ghostel-dwim/src/"
+  :bind (("C-c s s" . ghostel-dwim)
+         ("C-c s c-b" . ghostel-dwim-switch)
+         ("C-c s o" . ghostel-dwim-open)
+         ("C-c s k" . ghostel-dwim-kill-buffers)
+         ("C-c p s" . ghostel-dwim-project)
+         ("C-c p c-b" . ghostel-dwim-project-switch)
+         ("C-c p o" . ghostel-dwim-project-open)
+         ("C-c p k" . ghostel-dwim-project-kill-buffers)))
+#+end_src
+
+Omit ~:load-path~ when the package is already installed.
+
+** Commands
+
+*** Directory Commands
 
 These commands operate on Ghostel buffers whose buffer-local ~default-directory~
-matches the current buffer's directory.  Directory matching is string-based
-after lightweight path normalization; it does not resolve symlinks or probe the
-filesystem.
+matches the current buffer's directory.  Directory matching uses normalized path
+strings; it does not resolve symlinks or probe the filesystem.
 
-*** ~ghostel-dwim~
+- ~ghostel-dwim~ ::
+  Reuse the first known-idle Ghostel buffer for the current directory, or start
+  a fresh session when no reusable session exists.
 
-Reuse the first known-idle Ghostel buffer for the current directory, or start a
-fresh session when no reusable session exists.
+- ~ghostel-dwim-open~ ::
+  Start a fresh Ghostel session in the current directory.  This command always
+  creates a new session.
 
-*** ~ghostel-dwim-open~
+- ~ghostel-dwim-open-other-window~ ::
+  Start a fresh session for the current directory while asking Emacs to avoid
+  the selected window.
 
-Start a fresh Ghostel session in the current directory.  This command always
-creates a new session.
+- ~ghostel-dwim-switch~ ::
+  Prompt for and switch to a Ghostel buffer associated with the current
+  directory.  If none exists, signal ~user-error~ without creating a session.
 
-*** ~ghostel-dwim-open-other-window~
+- ~ghostel-dwim-clear-buffers~ ::
+  Kill exited Ghostel buffers associated with the current directory.
 
-Start a fresh Ghostel session for the current directory while asking Emacs to
-avoid the selected window.
+- ~ghostel-dwim-clear-idle-buffers~ ::
+  Kill known-idle Ghostel buffers associated with the current directory.
+  Preserve sessions whose command state is unknown.
 
-*** ~ghostel-dwim-switch~
+- ~ghostel-dwim-kill-buffers~ ::
+  Kill all Ghostel buffers associated with the current directory, confirming
+  once when running or unknown live sessions are present.
 
-Prompt for and switch to a Ghostel buffer associated with the current directory.
-If no directory buffer exists, signal ~user-error~ instead of creating one.
+*** Project Commands
 
-*** ~ghostel-dwim-clear-buffers~
+These commands operate on Ghostel buffers belonging to the current ~project.el~
+project.  They follow Ghostel's project discovery, including
+~ghostel-project-buffer-scope~.  Each command signals ~user-error~ when the
+current buffer is not in a project.
 
-Kill exited Ghostel buffers associated with the current directory.
+- ~ghostel-dwim-project~ ::
+  Reuse the first known-idle Ghostel buffer for the current project, or start a
+  fresh project session when no reusable session exists.
 
-*** ~ghostel-dwim-clear-idle-buffers~
+- ~ghostel-dwim-project-open~ ::
+  Start a fresh Ghostel session at the current project root.  Use Ghostel's
+  project entry point for native project naming and identity.
 
-Kill known-idle Ghostel buffers associated with the current directory.  Unknown
-live sessions are preserved.
+- ~ghostel-dwim-project-open-other-window~ ::
+  Start a fresh project session while asking Emacs to avoid the selected
+  window.
 
-*** ~ghostel-dwim-kill-buffers~
+- ~ghostel-dwim-project-switch~ ::
+  Prompt for and switch to a Ghostel buffer associated with the current
+  project.  If none exists, signal ~user-error~ without creating a session.
 
-Kill all Ghostel buffers associated with the current directory, confirming once
-when running or unknown live sessions are present.
+- ~ghostel-dwim-project-clear-buffers~ ::
+  Kill exited Ghostel buffers associated with the current project.
 
-** Project-wide commands
+- ~ghostel-dwim-project-clear-idle-buffers~ ::
+  Kill known-idle Ghostel buffers associated with the current project.
+  Preserve sessions whose command state is unknown.
 
-These commands operate on Ghostel buffers that belong to the current ~project.el~
-project.  Project buffer discovery follows Ghostel's own project semantics,
-including ~ghostel-project-buffer-scope~.
+- ~ghostel-dwim-project-kill-buffers~ ::
+  Kill all Ghostel buffers associated with the current project, confirming
+  once when running or unknown live sessions are present.
 
-*** ~ghostel-dwim-project~
+** Session State
 
-Reuse the first known-idle Ghostel buffer for the current project, or start a
-fresh project session when no reusable session exists.  If the current buffer is
-not in a project, signal ~user-error~.
+Ghostel DWIM uses Ghostel's command start and finish hooks to decide whether a
+live session is reusable.  A session is idle only after Ghostel reports that it
+returned to a prompt.
 
-*** ~ghostel-dwim-project-open~
-
-Start a fresh Ghostel session at the current project root.  This uses Ghostel's
-project entry point so project naming and identity stay compatible with Ghostel.
-
-*** ~ghostel-dwim-project-open-other-window~
-
-Start a fresh project Ghostel session while asking Emacs to avoid the selected
-window.
-
-*** ~ghostel-dwim-project-switch~
-
-Prompt for and switch to a Ghostel buffer associated with the current project.
-If no project buffer exists, signal ~user-error~ instead of creating one.
-
-*** ~ghostel-dwim-project-clear-buffers~
-
-Kill exited Ghostel buffers associated with the current project.
-
-*** ~ghostel-dwim-project-clear-idle-buffers~
-
-Kill known-idle Ghostel buffers associated with the current project.  Unknown
-live sessions are preserved.
-
-*** ~ghostel-dwim-project-kill-buffers~
-
-Kill all Ghostel buffers associated with the current project, confirming once
-when running or unknown live sessions are present.
-
-* Session State
-
-~ghostel-dwim~ tracks Ghostel command start and finish hooks to decide whether a
-live session is reusable.  A session is treated as idle only after Ghostel has
-reported that it returned to a prompt.
-
-When command state is unknown, ~ghostel-dwim~ is conservative:
+When command state is unknown:
 
 - DWIM reuse does not treat the session as idle.
-- idle cleanup does not kill it.
-- kill-all cleanup asks for confirmation before killing it.
+- Idle cleanup preserves the session.
+- Kill-all cleanup asks for confirmation before killing it.
 
 This matters when shell integration is disabled or unsupported.
 
-* Tips
+** Customization
 
-~ghostel-dwim~ displays buffers through ~pop-to-buffer~, so normal
-~display-buffer-alist~ rules still control window placement.  A common setup is to
-show Ghostel buffers in a bottom side window:
+- ~ghostel-dwim-confirm-kill-running-functions~ ::
+  Abnormal hook used by the directory and project kill-all commands when
+  running or unknown live sessions are present.  Each function receives one
+  prompt string.  Cleanup proceeds only when every function returns non-nil.
+  By default, the hook asks for confirmation with ~yes-or-no-p~.
 
-#+begin_src emacs-lisp
-  (add-to-list 'display-buffer-alist
-               '((derived-mode . ghostel-mode)
-                 (display-buffer-in-side-window)
-                 (side . bottom)
-                 (slot . 0)
-                 (window-height . 0.33)))
-#+end_src
+- ~display-buffer-alist~ ::
+  Native Emacs option controlling window placement.  Ghostel DWIM displays
+  existing buffers through ~pop-to-buffer~, so normal display rules apply.
+  The ~*-other-window~ commands ask Emacs to avoid the selected window;
+  the display rules determine the actual placement.
 
-The ~*-other-window~ commands ask Emacs to avoid reusing the selected window.  The
-exact placement is still decided by your display rules.
-
-Cleanup commands delete bottom side windows that were displaying Ghostel buffers
-killed by the cleanup action.  They do not explicitly delete ordinary windows or
-non-bottom side windows.
-
-The confirmation hook for killing running or unknown live sessions is
-customizable:
+For example, display Ghostel buffers in a bottom side window:
 
 #+begin_src emacs-lisp
-  (customize-option 'ghostel-dwim-confirm-kill-running-functions)
+(add-to-list 'display-buffer-alist
+             '((derived-mode . ghostel-mode)
+               (display-buffer-in-side-window)
+               (side . bottom)
+               (slot . 0)
+               (window-height . 0.33)))
 #+end_src
 
-* Development
+Cleanup deletes bottom side windows displaying Ghostel buffers killed by the
+cleanup command.  It does not explicitly delete ordinary windows or side windows
+on other edges.
 
-Run ~nix develop~ from the repository root to enter the development shell.
-The shell provides Emacs with Ghostel, the Lisp formatter ~elfmt~, ~nixfmt~,
-~treefmt~, and ~prek~.  For direnv, create a local ~.envrc~ containing
-~use flake~ and allow it with ~direnv allow~.
+** Development
+
+*** Environment
+
+Run ~nix develop~ from the repository root.  The shell provides Emacs with
+Ghostel, the Lisp formatter ~elfmt~, ~nixfmt~, ~treefmt~, and ~prek~.  For
+direnv, create a local ~.envrc~ containing ~use flake~ and run ~direnv allow~.
 
 Entering the shell generates ~.editorconfig~, ~treefmt.toml~, and ~prek.toml~,
 and installs the Git pre-commit formatting hook.  These generated files are
-ignored by Git; edit their source configuration in
-~tool/devshells/default.nix~.  ~.dir-locals.el~ configures source
-load paths for Emacs and Flymake.
+ignored by Git; edit their source data in ~tool/devshells/default.nix~.
+~.dir-locals.el~ configures source load paths for Emacs and Flymake.
+
+*** Formatting
 
 Format the repository, or check whether formatting would change files:
 
@@ -225,25 +221,27 @@ nix fmt
 nix fmt -- --fail-on-change
 #+end_src
 
-The Lisp formatter uses Emacs indentation, local indentation declarations,
-and EditorConfig settings.  It does not wrap long forms or docstrings; keep
-Lisp lines within 70 columns, except the file's first line.  Nix formatting
-uses a width of 80 columns.  The pre-commit hook checks staged files and
-rejects changes that need formatting; review and stage the formatted result
-before committing again.
+The Lisp formatter uses Emacs indentation, local indentation declarations, and
+EditorConfig settings.  It does not wrap long forms or docstrings; keep Lisp
+lines within 70 columns, except the file's first line.  Nix formatting uses a
+width of 80 columns.  The pre-commit hook checks staged files and rejects
+changes that need formatting.  Review and stage the formatted result before
+committing again.
 
-Run the tests with the development shell's dependency set:
+*** Tests
+
+Run the ERT tests with the development shell's dependency set:
 
 #+begin_src sh
 nix develop --command emacs --batch -L src \
   -l test/ghostel-dwim-tests.el -f ert-run-tests-batch-and-exit
 #+end_src
 
-The tests create and clean up their own buffers and pipe processes.  Run
-them in batch Emacs, outside an active interactive session.  The command
-omits ~-Q~ so the Nix Emacs wrapper can load its package paths.
+The tests create and clean up their own buffers and pipe processes.  Run them in
+batch Emacs, outside an active interactive session.  The command omits ~-Q~ so
+the Nix Emacs wrapper can load its package paths.
 
-* AI Assistance Disclosure
+** AI Assistance Disclosure
 
 Parts of the code, tests, and documentation in this project were developed with
 assistance from AI tools.  All AI-generated output was reviewed and modified by
@@ -251,7 +249,11 @@ the maintainer where necessary.  The maintainer remains responsible for the
 final content.  No secrets, private user data, or other sensitive information
 were intentionally provided to AI tools.
 
-* COPYING
+** GNU Free Documentation License
+
+#+HTML: <details>
+
+#+HTML: <summary>Read the GNU Free Documentation License.</summary>
 
 #+begin_src text
 
@@ -707,5 +709,7 @@ were intentionally provided to AI tools.
   to permit their use in free software.
 
 #+end_src
+
+#+HTML: </details>
 
 # README ends here
