@@ -44,6 +44,10 @@
         };
       }
       {
+        imports = [
+          flake-parts.flakeModules.partitions
+        ];
+
         flake = {
           overlays = {
             default =
@@ -373,6 +377,27 @@
               in
               {
                 emacsPackagesFor = emacs: (emacsPackagesFor emacs).overrideScope scope;
+              };
+          };
+        };
+
+        partitionedAttrs = {
+          devShells = "tool";
+          formatter = "tool";
+        };
+
+        partitions = {
+          tool = {
+            extraInputsFlake = projectRoot + /tool;
+
+            module =
+              {
+                ...
+              }:
+              {
+                imports = [
+                  (projectRoot + /tool/flake-module.nix)
+                ];
               };
           };
         };

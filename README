@@ -205,6 +205,44 @@ customizable:
   (customize-option 'ghostel-dwim-confirm-kill-running-functions)
 #+end_src
 
+* Development
+
+Run ~nix develop~ from the repository root to enter the development shell.
+The shell provides Emacs with Ghostel, the Lisp formatter ~elfmt~, ~nixfmt~,
+~treefmt~, and ~prek~.  For direnv, create a local ~.envrc~ containing
+~use flake~ and allow it with ~direnv allow~.
+
+Entering the shell generates ~.editorconfig~, ~treefmt.toml~, and ~prek.toml~,
+and installs the Git pre-commit formatting hook.  These generated files are
+ignored by Git; edit their source configuration in
+~tool/devshells/default.nix~.  ~.dir-locals.el~ configures source
+load paths for Emacs and Flymake.
+
+Format the repository, or check whether formatting would change files:
+
+#+begin_src sh
+nix fmt
+nix fmt -- --fail-on-change
+#+end_src
+
+The Lisp formatter uses Emacs indentation, local indentation declarations,
+and EditorConfig settings.  It does not wrap long forms or docstrings; keep
+Lisp lines within 70 columns, except the file's first line.  Nix formatting
+uses a width of 80 columns.  The pre-commit hook checks staged files and
+rejects changes that need formatting; review and stage the formatted result
+before committing again.
+
+Run the tests with the development shell's dependency set:
+
+#+begin_src sh
+nix develop --command emacs --batch -L src \
+  -l test/ghostel-dwim-tests.el -f ert-run-tests-batch-and-exit
+#+end_src
+
+The tests create and clean up their own buffers and pipe processes.  Run
+them in batch Emacs, outside an active interactive session.  The command
+omits ~-Q~ so the Nix Emacs wrapper can load its package paths.
+
 * AI Assistance Disclosure
 
 Parts of the code, tests, and documentation in this project were developed with
