@@ -114,10 +114,6 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                      (ghostel-dwim-test--make-process t)))))
     buffer))
 
-(defun ghostel-dwim-test--buffer-names (buffers)
-  "Return the sorted names of BUFFERS."
-  (sort (mapcar #'buffer-name buffers) #'string<))
-
 (defun ghostel-dwim-test--make-subdir (directory name)
   "Create a subdirectory NAME inside DIRECTORY and return it."
   (let ((subdir (file-name-as-directory
@@ -253,8 +249,10 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
         (let ((ghostel-project-buffer-scope 'default-directory)
               (current (ghostel-dwim-test--make-buffer "current"
                                                        project-dir))
-              (inside (ghostel-dwim-test--make-buffer "ghostel-inside"
-                                                      project-dir t))
+              (inside
+               (ghostel-dwim-test--make-buffer
+                "ghostel-inside"
+                (ghostel-dwim-test--make-subdir project-dir "src") t))
               (outside (ghostel-dwim-test--make-buffer
                         "ghostel-outside"
                         other-project-dir t)))
@@ -292,65 +290,37 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                     (should (eq (funcall command argument) target))
                     (should (eq (window-buffer) target))))))))))))
 
-(ert-deftest ghostel-dwim-switch-interactive-candidates-are-scoped ()
-  (ghostel-dwim-test--with-temp-dir dir
-    (ghostel-dwim-test--with-temp-dir other-dir
+(ert-deftest ghostel-dwim-switch-completion-respects-scope ()
+  (ghostel-dwim-test--with-project dir
+    (ghostel-dwim-test--with-project outside
       (ghostel-dwim-test--with-buffers
-        (let ((current (ghostel-dwim-test--make-buffer "current" dir))
-              (first (ghostel-dwim-test--make-buffer
-                      "ghostel-first" dir t))
-              (second (ghostel-dwim-test--make-buffer
-                       "ghostel-second" dir t))
-              (_other (ghostel-dwim-test--make-buffer
-                       "ghostel-other"
-                       other-dir t))
-              candidates
-              displayed)
-          (cl-letf (((symbol-function 'completing-read)
-                     (lambda (_prompt collection &rest _)
-                       (setq candidates collection)
-                       (buffer-name second)))
-                    ((symbol-function 'pop-to-buffer)
-                     (lambda (buffer)
-                       (setq displayed buffer)
-                       buffer)))
-            (with-current-buffer current
-              (call-interactively #'ghostel-dwim-switch)))
-          (should (equal (ghostel-dwim-test--buffer-names
-                          (list first second))
-                         (sort candidates #'string<)))
-          (should (eq displayed second)))))))
-
-(ert-deftest
-    ghostel-dwim-project-switch-interactive-candidates-are-scoped ()
-  (ghostel-dwim-test--with-project project-dir
-    (ghostel-dwim-test--with-project other-project-dir
-      (ghostel-dwim-test--with-buffers
-        (let ((current (ghostel-dwim-test--make-buffer "current"
-                                                       project-dir))
-              (first (ghostel-dwim-test--make-buffer "ghostel-first"
-                                                     project-dir t))
-              (second (ghostel-dwim-test--make-buffer "ghostel-second"
-                                                      project-dir t))
-              (_other (ghostel-dwim-test--make-buffer
-                       "ghostel-other"
-                       other-project-dir t))
-              candidates
-              displayed)
-          (cl-letf (((symbol-function 'completing-read)
-                     (lambda (_prompt collection &rest _)
-                       (setq candidates collection)
-                       (buffer-name second)))
-                    ((symbol-function 'pop-to-buffer)
-                     (lambda (buffer)
-                       (setq displayed buffer)
-                       buffer)))
-            (with-current-buffer current
-              (call-interactively #'ghostel-dwim-project-switch)))
-          (should (equal (ghostel-dwim-test--buffer-names
-                          (list first second))
-                         (sort candidates #'string<)))
-          (should (eq displayed second)))))))
+        (let* ((default-directory dir)
+               (root (ghostel-dwim-test--make-buffer
+                      "ghostel-root" dir t))
+               (nested
+                (ghostel-dwim-test--make-buffer
+                 "ghostel-nested"
+                 (ghostel-dwim-test--make-subdir dir "src") t)))
+          (ghostel-dwim-test--make-buffer "ghostel-outside" outside t)
+          (dolist (case `((ghostel-dwim-switch
+                           (,root) ,root)
+                          (ghostel-dwim-project-switch
+                           (,root ,nested) ,nested)))
+            (ert-info ((format "%S" (car case)))
+              (save-window-excursion
+                (cl-letf (((symbol-function 'completing-read)
+                           (lambda (_prompt choices _pred match
+                                            &rest _)
+                             (should match)
+                             (should
+                              (equal
+                               (sort choices #'string<)
+                               (sort (mapcar #'buffer-name
+                                             (nth 1 case))
+                                     #'string<)))
+                             (buffer-name (nth 2 case)))))
+                  (call-interactively (car case)))
+                (should (eq (window-buffer) (nth 2 case)))))))))))
 
 (ert-deftest ghostel-dwim-switch-rejects-vanished-selection ()
   (dolist (command '(ghostel-dwim-switch ghostel-dwim-project-switch))
@@ -765,9 +735,13 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                (target (ghostel-dwim-test--make-ghostel-session
                         "ghostel-multiple-bottom-cleanup" dir nil))
                (first (display-buffer-in-side-window
-                       target '((side . bottom) (slot . 0))))
+                       current '((side . bottom) (slot . 0))))
                (second (display-buffer-in-side-window
-                        target '((side . bottom) (slot . 1)))))
+                        current '((side . bottom) (slot . 1)))))
+          ;; Emacs would keep these windows to show CURRENT again.
+          (dolist (window (list first second))
+            (set-window-dedicated-p window nil)
+            (set-window-buffer window target))
           (with-current-buffer current
             (should (= 1 (ghostel-dwim-clear-buffers))))
           (should-not (buffer-live-p target))
@@ -798,16 +772,14 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                (target (ghostel-dwim-test--make-ghostel-session
                         "ghostel-right-side-window-cleanup" dir nil))
                (window (display-buffer-in-side-window
-                        target '((side . right))))
-               deleted)
-          (cl-letf (((symbol-function
-                      'ghostel-dwim--delete-bottom-windows)
-                     (lambda (windows)
-                       (setq deleted windows))))
-            (with-current-buffer current
-              (should (= 1 (ghostel-dwim-clear-buffers)))))
+                        current '((side . right)))))
+          (set-window-dedicated-p window nil)
+          (set-window-buffer window target)
+          (with-current-buffer current
+            (should (= 1 (ghostel-dwim-clear-buffers))))
           (should-not (buffer-live-p target))
-          (should-not (memq window deleted)))))))
+          (should (window-live-p window))
+          (should (eq (window-buffer window) current)))))))
 
 (ert-deftest ghostel-dwim-cleanup-decline-preserves-bottom-window ()
   (save-window-excursion
