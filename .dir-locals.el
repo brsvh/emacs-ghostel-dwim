@@ -8,8 +8,9 @@
     (let* ((root (locate-dominating-file
                   default-directory ".dir-locals.el"))
            (source (expand-file-name "src/" root)))
-      (setq-local elisp-flymake-byte-compile-load-path
-                  (cons source elisp-flymake-byte-compile-load-path)
-                  load-path (cons source load-path))))))
+      (dolist (variable '(load-path
+                          elisp-flymake-byte-compile-load-path))
+        (make-local-variable variable)
+        (add-to-list variable source))))))
 
  (nil . ((sentence-end-double-space . t))))
