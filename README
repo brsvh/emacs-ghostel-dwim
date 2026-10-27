@@ -207,6 +207,8 @@ Run ~nix develop~ from the repository root.  The shell provides Emacs with
 Ghostel, the Lisp formatter ~elfmt~, ~nixfmt~, ~treefmt~, and ~prek~.  For
 direnv, create a local ~.envrc~ containing ~use flake~ and run ~direnv allow~.
 
+The formatter comes from the pinned [[https://github.com/brsvh/emacs-elfmt][emacs-elfmt]] flake input.
+
 Entering the shell generates ~.editorconfig~, ~treefmt.toml~, and ~prek.toml~,
 and installs the Git pre-commit formatting hook.  These generated files are
 ignored by Git; edit their source data in ~tool/devshells/default.nix~.
@@ -222,8 +224,8 @@ nix fmt -- --fail-on-change
 #+end_src
 
 The Lisp formatter uses Emacs indentation, local indentation declarations, and
-EditorConfig settings.  It does not wrap long forms or docstrings; keep Lisp
-lines within 70 columns, except the file's first line.  Nix formatting uses a
+EditorConfig settings.  It checks the 70-column limit, except on the file's
+first line, but does not wrap long forms or docstrings.  Nix formatting uses a
 width of 80 columns.  The pre-commit hook checks staged files and rejects
 changes that need formatting.  Review and stage the formatted result before
 committing again.
