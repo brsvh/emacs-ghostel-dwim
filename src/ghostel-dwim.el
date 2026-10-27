@@ -48,10 +48,12 @@
 ;;; Code:
 
 (require 'ghostel)
+(require 'ghostel-project nil t)
 (require 'project)
 (require 'seq)
 
 (declare-function ghostel--project-buffers "ghostel" ())
+(declare-function ghostel-project-buffer-list "ghostel-project" ())
 
 (defvar ghostel--process)
 
@@ -293,8 +295,12 @@ Signal `user-error' with EMPTY-MESSAGE when BUFFERS is nil."
 (defun ghostel-dwim--project-buffers ()
   "Return current project buffers using Ghostel project semantics."
   (ghostel-dwim--require-project)
-  (let (buffers)
-    (dolist (buffer (ghostel--project-buffers) (nreverse buffers))
+  (let ((candidates
+         (if (fboundp 'ghostel-project-buffer-list)
+             (ghostel-project-buffer-list)
+           (ghostel--project-buffers)))
+        buffers)
+    (dolist (buffer candidates (nreverse buffers))
       (when (ghostel-dwim--ghostel-buffer-p buffer)
         (push buffer buffers)))))
 
