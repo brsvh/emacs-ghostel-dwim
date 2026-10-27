@@ -48,6 +48,36 @@ For most workflows, bind ~ghostel-dwim~ and ~ghostel-dwim-project~ first.  The
 explicit open, switch, and cleanup commands are useful when you manage several
 terminal sessions in the same directory or project.
 
+** Nix
+
+Add this repository as a flake input named ~ghostel-dwim~:
+
+#+begin_src nix
+inputs = {
+  ghostel-dwim = {
+    url = "git+https://github.com/brsvh/emacs-ghostel-dwim.git?ref=main";
+  };
+};
+#+end_src
+
+Include ~inputs.ghostel-dwim.overlays.default~ in your Nixpkgs overlays,
+then select the package from that Emacs package set:
+
+#+begin_src nix
+(pkgs.emacsPackagesFor pkgs.emacs).emacsWithPackages (
+  epkgs: with epkgs; [
+    ghostel-dwim
+  ]
+)
+#+end_src
+
+The overlay builds Ghostel DWIM from this checkout's ~src/~ directory and
+includes Ghostel as a dependency.  It also overrides Ghostel's Zig dependency
+fetching and module cache setup.  The dependency manifest is embedded in
+~flake.nix~ and checked against Ghostel's complete dependency graph during the
+build.  When updating Nixpkgs to a different Ghostel version, that manifest may
+need updating too.
+
 * Commands
 
 ** Directory-wide commands
