@@ -90,6 +90,7 @@ When GHOSTEL-P is non-nil, put the buffer in `ghostel-mode'."
 
 When EXITED is non-nil, return a non-live process object."
   (let ((process (make-pipe-process :name "ghostel-dwim-test"
+                                    :buffer (current-buffer)
                                     :noquery t)))
     (push process ghostel-dwim-test--processes)
     (when exited
@@ -160,6 +161,17 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                   'running))
       (run-hook-with-args 'ghostel-command-finish-functions buffer 1)
       (should (ghostel-dwim-idle-p buffer)))))
+
+(ert-deftest ghostel-dwim-unload-removes-command-hooks ()
+  (unwind-protect
+      (progn
+        (unload-feature 'ghostel-dwim t)
+        (should-not (featurep 'ghostel-dwim))
+        (should-not (memq 'ghostel-dwim--command-start
+                          ghostel-command-start-functions))
+        (should-not (memq 'ghostel-dwim--command-finish
+                          ghostel-command-finish-functions)))
+    (require 'ghostel-dwim)))
 
 (ert-deftest ghostel-dwim-directory-buffers-follow-directory ()
   (ghostel-dwim-test--with-temp-dir dir
@@ -713,12 +725,23 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
                    (ghostel-dwim-test--make-ghostel-session
                     "ghostel-cleanup" dir state 'live))
                  '(idle running nil))))
-          (ghostel-dwim-test--with-confirmation t prompts
-            (should (= 3 (funcall command)))
+          (dolist (buffer buffers)
+            (with-current-buffer buffer
+              (setq-local ghostel-query-before-killing t)
+              (set-process-query-on-exit-flag ghostel--process t)))
+          (let ((ghostel-dwim-confirm-kill-running-functions
+                 '(yes-or-no-p))
+                prompts)
+            (cl-letf (((symbol-function 'yes-or-no-p)
+                       (lambda (prompt) (push prompt prompts) t)))
+              (with-current-buffer (car buffers)
+                (should (= 3 (funcall command)))))
             (should (= 1 (length prompts)))
             (should (string-match-p "Kill 2 running or unknown"
                                     (car prompts))))
-          (should-not (seq-some #'buffer-live-p buffers)))))))
+          (should-not (seq-some #'buffer-live-p buffers))
+          (should-not (seq-some #'process-live-p
+                                ghostel-dwim-test--processes)))))))
 
 (ert-deftest ghostel-dwim-cleanup-with-no-candidates ()
   (ghostel-dwim-test--with-project dir
@@ -812,14 +835,23 @@ PROCESS-STATE may be `live', `exited', or nil for no process."
       (ghostel-dwim-test--with-buffers
         (let* ((default-directory dir)
                (target (ghostel-dwim-test--make-ghostel-session
-                        "ghostel-veto" dir nil))
+                        "ghostel-veto" dir 'idle 'live))
+               (process (buffer-local-value 'ghostel--process target))
                (window (display-buffer-in-side-window
                         target '((side . bottom)))))
           (with-current-buffer target
+            (setq-local ghostel-query-before-killing t)
+            (set-process-query-on-exit-flag process t)
             (add-hook 'kill-buffer-query-functions
                       (lambda () nil) nil t))
-          (should (= 0 (ghostel-dwim-clear-buffers)))
+          (cl-letf (((symbol-function 'yes-or-no-p)
+                     (lambda (&rest _) (ert-fail "Duplicate query"))))
+            (should (= 0 (ghostel-dwim-clear-idle-buffers))))
           (should (buffer-live-p target))
+          (should (process-live-p process))
+          (should (process-query-on-exit-flag process))
+          (should (buffer-local-value 'ghostel-query-before-killing
+                                      target))
           (should (window-live-p window))
           (should (eq (window-buffer window) target)))))))
 

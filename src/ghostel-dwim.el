@@ -55,8 +55,6 @@
 (declare-function ghostel--project-buffers "ghostel" ())
 (declare-function ghostel-project-buffer-list "ghostel-project" ())
 
-(defvar ghostel--process)
-
 (defgroup ghostel-dwim nil
   "Directory- and project-aware Ghostel commands."
   :group 'tools
@@ -168,11 +166,19 @@ Ignore windows that cannot be deleted."
 Return non-nil when BUFFER was live before the kill attempt and
 is no longer live afterward."
   (when (buffer-live-p buffer)
-    (let ((windows (ghostel-dwim--buffer-bottom-windows buffer)))
-      (let ((kill-buffer-query-functions
-             (remq 'process-kill-buffer-query-function
-                   kill-buffer-query-functions)))
-        (kill-buffer buffer))
+    (let* ((windows (ghostel-dwim--buffer-bottom-windows buffer))
+           (process (buffer-local-value 'ghostel--process buffer))
+           (query (and (processp process)
+                       (process-query-on-exit-flag process))))
+      (unwind-protect
+          (with-current-buffer buffer
+            ;; Cleanup has already checked state and confirmation.
+            (let ((ghostel-query-before-killing nil))
+              (when (processp process)
+                (set-process-query-on-exit-flag process nil))
+              (kill-buffer buffer)))
+        (when (and (processp process) (process-live-p process))
+          (set-process-query-on-exit-flag process query)))
       (unless (buffer-live-p buffer)
         (ghostel-dwim--delete-bottom-windows windows)
         t))))
@@ -410,6 +416,14 @@ associated with the current project."
            (user-error
             (concat "No Ghostel buffers are associated with "
                     "the current project")))))))
+
+(defun ghostel-dwim-unload-function ()
+  "Remove Ghostel DWIM hooks before unloading the package."
+  (remove-hook 'ghostel-command-start-functions
+               #'ghostel-dwim--command-start)
+  (remove-hook 'ghostel-command-finish-functions
+               #'ghostel-dwim--command-finish)
+  nil)
 
 (add-hook 'ghostel-command-start-functions
           #'ghostel-dwim--command-start)
